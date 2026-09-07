@@ -24,6 +24,8 @@ chronological order, with the full commit id, ISO-8601 datetime
 
 ### Changed
 
+- Corrected the upstream repository URL and clarified how to clone a personal
+  fork in the contribution guide.
 - README restyled with centred header, shields.io badges, em-dash feature
   bullets, configuration tables for Tables 6 and 7, expanded project
   structure, and the standard Contributing / Code of Conduct / Security /
