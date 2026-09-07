@@ -1,14 +1,14 @@
 # Deployment Guide
 
-This document covers deploying `igasgd` in various environments.
+This document covers deploying `driftflow` in various environments.
 
 ## Installation
 
 ### From Source (Recommended)
 
 ```bash
-git clone https://github.com/example/igasgd.git
-cd igasgd
+git clone https://github.com/sachncs/information-geometric-adaptive-sampling.git
+cd information-geometric-adaptive-sampling
 pip install -e .
 ```
 
@@ -19,19 +19,19 @@ Add to your project's `pyproject.toml`:
 ```toml
 [project]
 dependencies = [
-    "igasgd",
+    "driftflow",
 ]
 
 # Or pin to a version
 dependencies = [
-    "igasgd>=0.1.0",
+    "driftflow>=1.0.0",
 ]
 ```
 
 ### In a Requirements File
 
 ```
-igasgd
+driftflow
 ```
 
 ## Environment Considerations
@@ -46,7 +46,7 @@ python --version  # Must be >= 3.10
 
 ### No Runtime Dependencies
 
-`igasgd` uses only the Python standard library. No additional system packages are required.
+`driftflow` uses only the Python standard library. No additional system packages are required.
 
 ### Virtual Environments
 
@@ -58,7 +58,7 @@ source .venv/bin/activate  # Linux/macOS
 # or
 .venv\Scripts\activate     # Windows
 
-pip install igasgd
+pip install driftflow
 ```
 
 ## Production Usage
@@ -66,7 +66,7 @@ pip install igasgd
 ### Basic Integration
 
 ```python
-from igasgd import (
+from driftflow import (
     CommonConfig,
     get_dataset_config,
     DVSSampler,
@@ -75,21 +75,21 @@ from igasgd import (
 )
 
 # Initialize once at module level
-_common_config = CommonConfig()
-_dataset_configs = {
+common_config = CommonConfig()
+dataset_configs = {
     ("GruM", "QM9"): get_dataset_config("GruM", "QM9"),
     ("GDSS", "ZINC250K"): get_dataset_config("GDSS", "ZINC250K"),
 }
 
 def generate_graph(drift_function, model, dataset, seed=None):
     """Generate a graph using DVS adaptive sampling."""
-    config = _dataset_configs[(model, dataset)]
+    config = dataset_configs[(model, dataset)]
     schedule = LinearSchedule(sigma_min=0.01, sigma_max=0.5)
 
     sampler = DVSSampler(
         drift_function=drift_function,
         noise_schedule=schedule,
-        common_config=_common_config,
+        common_config=common_config,
         dataset_config=config,
         solver="Euler",
         seed=seed,
@@ -156,7 +156,7 @@ docker run your-app
 After deployment, verify the package works:
 
 ```python
-from igasgd import DVSSampler, CommonConfig, LinearSchedule
+from driftflow import DVSSampler, CommonConfig, LinearSchedule
 
 config = CommonConfig()
 schedule = LinearSchedule(sigma_min=0.01, sigma_max=0.5)
@@ -216,13 +216,13 @@ Increase `terminal_time` or adjust `dt_max` to allow larger steps.
 For reproducible deployments, pin the exact version:
 
 ```
-igasgd==0.1.0
+driftflow==1.0.0
 ```
 
 Or in `pyproject.toml`:
 
 ```toml
 dependencies = [
-    "igasgd==0.1.0",
+    "driftflow==1.0.0",
 ]
 ```

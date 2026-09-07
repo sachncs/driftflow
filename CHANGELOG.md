@@ -14,7 +14,7 @@ chronological order, with the full commit id, ISO-8601 datetime
 ### Added
 
 - Comprehensive module-, class-, function-, and method-level docstrings
-  across the entire `igasgd` package (Google style, with "what" and
+  across the entire `driftflow` package (Google style, with "what" and
   "why" rationale).
 - One-line docstring on every test method (D102 satisfied across the
   test suite).
@@ -42,6 +42,47 @@ chronological order, with the full commit id, ISO-8601 datetime
 ### Removed
 
 - Deprecation warnings emitted by older ruff configuration layout.
+
+## [1.0.0] - 2026-09-07
+
+### Added
+
+- **Rebrand**: package renamed from `igasgd` to `driftflow` (import name,
+  PyPI project name, module tree, and all documentation).
+- `register_solver()` and the `SOLVERS` registry — a pluggable solver
+  extension point that decouples the adaptive loop from concrete
+  integrators (modularity / extendability).
+- `version.py` — single source of truth for the package version; the
+  build system reads it via `[tool.setuptools.dynamic]`.
+- Fail-fast input validation in `DVSSampler.sample()`: empty or ragged
+  matrices and negative / NaN / infinite `terminal_time` raise descriptive
+  `ValueError`\ s (reliability).
+- Input-validation, solver-registry, and `gamma`-resolution tests; the test
+  suite now counts **165 tests at 100% line coverage**.
+- CI **build** job that builds the sdist + wheel and verifies the wheel is
+  importable and the sdist contains docs / tests / examples / scripts.
+- CI **publish** job that uploads tagged `v*` releases to PyPI
+  (production readiness).
+- `package-data` declaration so `py.typed` ships in wheels.
+- Performance and scalability section in `docs/ARCHITECTURE.md`
+  documenting the `O(N^2 + N·D)`-per-step nested-list kernel and the
+  vectorised-backend extension path (scalability).
+
+### Changed
+
+- Package version bumped from `0.1.x` to `1.0.0` (production release).
+- `Development Status` classifier upgraded to `5 - Production/Stable`.
+- Analytics: the `info` dict correctness and determinism are now asserted
+  bit-for-bit in the test suite (full trajectory equality for identical
+  seeds).
+- CI and `scripts/ci.sh` aligned: lint/typecheck now include `examples/`,
+  pip runs with `--no-cache-dir`, pip caching added to CI.
+- README, docs, and architecture diagrams updated for the new name,
+  registry design, validation behaviour, and build workflow.
+
+### Removed
+
+- None.
 
 ## [0.1.1] - 2026-07-07
 

@@ -100,24 +100,35 @@ A `plot_trajectory(info)` helper could visualise:
 
 ## 4. Modularity
 
-### Pluggable solvers
+### Pluggable solvers (implemented)
 
-The baseline supports Euler and Heun via an `if solver == ...` branch. A more modular design would register solvers in a dictionary:
-
-```python
-SOLVERS = {
-    "Euler": euler_step,
-    "Heun": heun_step,
-    "DPM": dpm_solver_step,
-}
-```
-
-**Implementation:** Replace the `if/else` block in `DVSSampler.sample()` with:
+The sampler now registers solvers in a dictionary and dispatches through it:
 
 ```python
-solver_fn = SOLVERS[self._solver]
-next_features, next_adjacency = solver_fn(...)
+# driftflow/sampler.py
+SOLVERS: dict[str, SolverStep] = {"Euler": euler_dispatch, "Heun": heun_dispatch}
 ```
+
+New integrators implement the uniform `SolverStep` signature
+`(X, A, f_X, f_A, dt, noise, rng, drift_function, t) -> (X_next, A_next)`
+and are registered with:
+
+```python
+from driftflow import register_solver
+
+def midpoint_step(x, a, fx, fa, dt, noise, rng, drift, t):
+    # ... second-order midpoint integration ...
+    return x_next, a_next
+
+register_solver("Midpoint", midpoint_step)
+sampler = DVSSampler(..., solver="Midpoint")
+```
+
+The registry lives in `SOLVERS`; the loop in `DVSSampler.sample()` calls
+`SOLVERS[self.solver](...)` with no branching on solver identity.  The
+aggregation factor `gamma` is resolved from the dataset configuration by
+`DVSSampler.resolve_gamma` (`gamma_euler` for `"Euler"`, `gamma_heun`
+otherwise); override that method for bespoke mappings.
 
 ### Configurable schedulers
 

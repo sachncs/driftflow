@@ -1,6 +1,6 @@
 # Architecture and Data Flow
 
-This document explains how the `igasgd` package is structured, what each component does, and how data flows through a sampling run.
+This document explains how the `driftflow` package is structured, what each component does, and how data flows through a sampling run.
 
 ---
 
@@ -16,10 +16,11 @@ This document explains how the `igasgd` package is structured, what each compone
 ## 2. File-Level Responsibilities
 
 ```
-src/igasgd/
+driftflow/
   __init__.py      — Public API exports.
+  version.py       — Single source of the package version.
   config.py        — Hyperparameter dataclasses (Tables 6 & 7).
-  sampler.py       — Core DVS sampler and solver steps (Algorithms 1–3).
+  sampler.py       — Core DVS sampler, solver registry, solver steps (Algorithms 1–3).
   models.py        — Simplified denoising network approximations.
   schedule.py      — Noise schedule callables (linear, cosine, polynomial).
   utils.py         — Clipping, active-range checks, graph decoding.
@@ -41,7 +42,7 @@ Contains two frozen dataclasses:
 The heart of the package. It contains:
 
 - **Low-level equation helpers:**
-  - `_squared_l2_difference()` — element-wise squared L2 norm over nested lists.
+  - `squared_l2_difference()` — element-wise squared L2 norm over nested lists.
   - `compute_drift_variation_score()` — Equation 13.
   - `update_ema()` — Equation 14.
   - `compute_timestep()` — Equation 15.
@@ -50,6 +51,16 @@ The heart of the package. It contains:
 - **Solver steps:**
   - `euler_step()` — Equation 2 / Algorithm 2.
   - `heun_step()` — Algorithm 3.
+
+- **Solver registry:**
+  - `SOLVERS` — dict mapping solver names to uniform-signature step
+    functions.  The sampler loop dispatches through this registry, so new
+    integrators can be added with `register_solver()` without editing the
+    loop.
+  - `register_solver(name, step_fn)` — the primary extension point.
+  - `euler_dispatch` / `heun_dispatch` — thin adapters that expose the
+    public `euler_step` / `heun_step` under the uniform `SolverStep`
+    signature.
 
 - **Orchestrator:**
   - `DVSSampler` — Implements the full adaptive loop (Algorithm 1 meta-algorithm).
@@ -83,10 +94,9 @@ While t < T - eps_bound:
 
     5. Apply solver step:
        noise_scale = g_t * sqrt(dt_k)
-       if solver == "Euler":
-           X_k, A_k = euler_step(...)
-       else:
-           X_k, A_k = heun_step(...)
+       step_fn = SOLVERS[solver]           # solver registry dispatch
+       X_k, A_k = step_fn(X_prev, A_prev, f_X, f_A, dt_k,
+                          noise_scale, rng, drift_function, t)
 
     6. Record history and advance:
        append step info to info dict
@@ -160,7 +170,7 @@ Small, stateless helpers:
 |    else:                                                   |
 |      dt = dt_base                                          |
 |    dt = clip(dt, 0, T - t)                                 |
-|    X, A = euler_step / heun_step(...)                     |
+|    X, A = SOLVERS[solver](...)                            |
 |    record_history()                                        |
 |    t += dt                                                 |
 +-----------------------------------------------------------+
@@ -178,10 +188,11 @@ Small, stateless helpers:
 
 1. **Shape preservation:** Every solver step returns `(X_k, A_k)` with exactly the same shapes as `(X_{k-1}, A_{k-1})`.
 2. **Time monotonicity:** `t` never decreases. `dt_k` is always non-negative because it is clipped to `[dt_min, dt_max]` and then to `[0, T - t]`.
-3. **Determinism:** Fixing `seed` in `DVSSampler` makes the entire trajectory reproducible (drift evaluations are deterministic by assumption).
-4. **Bottleneck synchrony:** Both modalities share the same `dt_k`, so `time` is identical for X and A at every step.
-5. **EMA non-negativity:** If all drift differences are non-negative (squared norm), and `alpha in [0, 1]`, then `Vbar` stays non-negative.
-6. **Active-range inclusivity:** A time exactly equal to a boundary is considered inside the interval.
+3. **Determinism:** Fixing `seed` in `DVSSampler` makes the entire trajectory bit-for-bit reproducible (drift evaluations are deterministic by assumption, and the internal RNG is seeded from a single value).
+4. **Fail-fast validation:** malformed inputs (empty/ragged matrices, non-finite terminal times) raise `ValueError` before any numerical work.
+5. **Bottleneck synchrony:** Both modalities share the same `dt_k`, so `time` is identical for X and A at every step.
+6. **EMA non-negativity:** If all drift differences are non-negative (squared norm), and `alpha in [0, 1]`, then `Vbar` stays non-negative.
+7. **Active-range inclusivity:** A time exactly equal to a boundary is considered inside the interval.
 
 ---
 
@@ -190,12 +201,34 @@ Small, stateless helpers:
 The codebase raises explicit exceptions for contract violations rather than silently producing wrong results:
 
 - `ValueError` from `DVSSampler.__init__` when:
-  - `solver` is not `"Euler"` or `"Heun"`.
+  - `solver` is not registered in `SOLVERS`.
   - The requested solver has no `gamma` in `DatasetConfig`.
-- `ValueError` from `_squared_l2_difference()` when drift matrices have mismatched shapes.
+- `ValueError` from `DVSSampler.sample()` when the input matrices are
+  empty or ragged, or when `terminal_time` is negative, NaN, or infinite
+  (fail-fast validation before any work is done).
+- `ValueError` from `squared_l2_difference()` when drift matrices have mismatched shapes.
 - `KeyError` from `get_dataset_config()` when the `(model, dataset)` pair is unknown.
 
 No exceptions are raised for numerical edge cases such as `g_t = 0` or `Vbar = 0`; these are handled by the `epsilon_num` stabiliser and clipping.
+
+---
+
+## 5.1 Performance and Scalability
+
+The numerical kernels operate on pure-Python nested lists, which makes every
+solver step `O(N^2 + N·D)` time and `O(N^2 + N·D)` memory for a graph of `N`
+nodes with `D`-dimensional features.  This keeps the package dependency-free
+and is appropriate for small graphs, smoke tests, demos, and embedding.
+
+For larger graphs the same public API can be backed by a vectorised
+implementation (see [EXTENSIONS.md](EXTENSIONS.md) §2): the solver registry and
+callable schedules mean a NumPy/Numba backend can be substituted without
+touching the adaptive logic, the configuration, or the calling conventions.
+Per-call state is transient and re-entrant, so parallel trajectories can be
+run by creating one `DVSSampler` per thread/process.
+
+The `info` history grows linearly with the number of steps (`O(steps)`); for
+very long runs it can be disabled or trimmed by the caller.
 
 ---
 
@@ -203,7 +236,10 @@ No exceptions are raised for numerical edge cases such as `g_t = 0` or `Vbar = 0
 
 If you want to extend the sampler, the cleanest insertion points are:
 
-1. **New solver:** Add a solver step function in `sampler.py` and extend the `solver` branch in `DVSSampler.sample()`.
+1. **New solver:** Implement a step function with the uniform `SolverStep`
+   signature and call `register_solver(name, step_fn)` — no changes to
+   `DVSSampler.sample()` are needed.  The solver's `gamma` resolves from
+   `gamma_heun` by default; override `resolve_gamma` for other mappings.
 2. **New schedule:** Subclass a callable in `schedule.py` (or just pass any `Callable[[float], float]`).
 3. **New model wrapper:** Provide any `drift_function(X, A, t) -> (f_X, f_A)` callable; it does not need to inherit from `SimpleGraphDenoiser`.
 4. **New dataset config:** Add a row to `DATASET_CONFIGS` in `config.py`.

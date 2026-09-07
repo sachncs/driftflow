@@ -1,6 +1,6 @@
 <p align="center">
-  <h1 align="center">igasgd</h1>
-  <p align="center">Information-Geometric Adaptive Sampling for Graph Diffusion: pure-Python reproduction of the Drift Variation Score (DVS) adaptive sampler.</p>
+  <h1 align="center">driftflow</h1>
+  <p align="center">driftflow — adaptive SDE sampling for graph diffusion, driven by the Drift Variation Score (DVS). A pure-Python reproduction of the information-geometric adaptive sampler.</p>
   <p align="center">
     <a href="#installation"><img src="https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue" alt="Python"></a>
     <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="License"></a>
@@ -10,13 +10,18 @@
   </p>
 </p>
 
-**igasgd** is a pure-Python implementation of the **Drift Variation Score
+**driftflow** is a pure-Python implementation of the **Drift Variation Score
 (DVS) adaptive sampler** for graph diffusion models. It reproduces the
 training-free algorithms from the paper
 [**Information-Geometric Adaptive Sampling for Graph Diffusion**](https://arxiv.org/abs/2605.00250)
 (arXiv:2605.00250), wrapping any graph-diffusion drift function with an
 SDE solver whose timestep is adapted from the local Fisher-Rao curvature
 of the transition manifold.
+
+The name *driftflow* evokes the two things the library is built around —
+the **drift** of the diffusion SDE and the adaptive **flow** of the
+sampling trajectory it produces. It supersedes the former package name
+``igasgd`` while keeping the same public API.
 
 The package targets three algorithms from the paper:
 
@@ -42,8 +47,14 @@ The package targets three algorithms from the paper:
   GruM and GDSS with a documented drift interface contract.
 - **Zero runtime dependencies** — Pure Python standard library
   implementation, no NumPy or PyTorch required.
-- **Comprehensive test suite** — 153 tests covering mathematical
-  correctness, edge cases, and numerical stability; 99% line coverage.
+- **Pluggable solver registry** — Add new SDE integrators via the
+  ``SOLVERS`` / ``register_solver`` extension point without editing
+  the sampler loop.
+- **Fail-fast input validation** — Ragged/empty matrices and invalid
+  terminal times raise descriptive ``ValueError``\ s before the loop.
+- **Comprehensive test suite** — 165 tests covering mathematical
+  correctness, edge cases, numerical stability, determinism, and
+  input validation, at 100% line coverage.
 
 ---
 
@@ -72,7 +83,7 @@ pip install -e ".[dev]"
 ### Python API
 
 ```python
-from igasgd import (
+from driftflow import (
     CommonConfig,
     DVSSampler,
     GruMApproximation,
@@ -145,7 +156,7 @@ dataset = get_dataset_config("GruM", "QM9")
 # ... and pass active_range=[] to a custom DatasetConfig instead.
 
 # Use a constant noise schedule for deterministic testing
-from igasgd import constant_schedule
+from driftflow import constant_schedule
 schedule = constant_schedule(0.1)
 ```
 
@@ -183,7 +194,7 @@ Retrieve any entry via `get_dataset_config(model, dataset)`.
 ### Noise Schedules
 
 ```python
-from igasgd import LinearSchedule, CosineSchedule, PolynomialSchedule, constant_schedule
+from driftflow import LinearSchedule, CosineSchedule, PolynomialSchedule, constant_schedule
 
 # Linear interpolation
 schedule = LinearSchedule(sigma_min=0.01, sigma_max=0.5)
@@ -208,6 +219,8 @@ See [`docs/MATH.md`](docs/MATH.md) for the exact equations and
 | Symbol | Type | Description |
 |--------|------|-------------|
 | `DVSSampler` | class | Core DVS-driven adaptive sampler (Algorithms 1–3) |
+| `SOLVERS` | dict | Registry mapping solver names to step functions |
+| `register_solver(name, fn)` | function | Register a custom solver step (extension point) |
 | `CommonConfig` | dataclass | Hyperparameters from Table 6 |
 | `DatasetConfig` | dataclass | Hyperparameters from Table 7 |
 | `get_dataset_config(model, dataset)` | function | Look up configuration for a (model, dataset) pair |
@@ -218,44 +231,46 @@ See [`docs/MATH.md`](docs/MATH.md) for the exact equations and
 | `constant_schedule(sigma)` | function | Constant `g(t) = sigma` schedule |
 | `GruMApproximation(num_nodes, feature_dim, seed)` | class | Simplified GruM stand-in denoiser |
 | `GDSSApproximation(num_nodes, feature_dim, seed)` | class | Simplified GDSS stand-in denoiser |
+| `__version__` | str | Package version (single source in `version.py`) |
 
 ---
 
 ## Project Structure
 
 ```
-igasgd/
-├── src/igasgd/                 # Package source code
-│   ├── __init__.py             # Public API exports
-│   ├── config.py               # Hyperparameter dataclasses (Tables 6 & 7)
-│   ├── sampler.py              # Core DVS sampler (Algorithms 1-3)
-│   ├── models.py               # Simplified denoiser approximations
-│   ├── schedule.py             # Noise schedule callables
-│   ├── utils.py                # Clipping, active ranges, decoding
-│   └── py.typed                # PEP 561 type marker
-├── tests/                      # Test suite (153 tests)
-│   ├── test_config.py          # 21 tests
-│   ├── test_models.py          # 18 tests
-│   ├── test_sampler.py         # 75 tests
-│   ├── test_schedule.py        # 17 tests
-│   └── test_utils.py           # 22 tests
-├── examples/                   # Runnable demos with CLI
-│   └── demo.py                 # Synthetic drift + approximation demo
-├── docs/                       # Extended documentation
-│   ├── API_REFERENCE.md        # Complete public API docs
-│   ├── ARCHITECTURE.md         # System design and data flow
-│   ├── DEPLOYMENT.md           # Production deployment guide
-│   ├── DEVELOPER_GUIDE.md      # Dev workflow, testing, linting
-│   ├── EXTENSIONS.md           # Optional enhancements roadmap
-│   ├── INDEX.md                # Documentation index
-│   ├── MATH.md                 # Equation-by-equation math docs
-│   └── USAGE.md                # Step-by-step usage guide
-├── pyproject.toml              # Build configuration
-├── LICENSE                     # MIT License
-├── CHANGELOG.md                # Version history
-├── CONTRIBUTING.md             # Contribution guidelines
-├── CODE_OF_CONDUCT.md          # Community standards
-└── SECURITY.md                 # Security policy
+driftflow/
+├── driftflow/              # Package source code
+│   ├── __init__.py         # Public API exports
+│   ├── version.py          # Single source of version
+│   ├── config.py           # Hyperparameter dataclasses (Tables 6 & 7)
+│   ├── sampler.py          # Core DVS sampler (Algorithms 1-3), solver registry
+│   ├── models.py           # Simplified denoiser approximations
+│   ├── schedule.py         # Noise schedule callables
+│   ├── utils.py            # Clipping, active ranges, decoding
+│   └── py.typed            # PEP 561 type marker
+├── tests/                  # Test suite (165 tests)
+│   ├── test_config.py      # 15 tests
+│   ├── test_models.py      # 23 tests
+│   ├── test_sampler.py     # 82 tests
+│   ├── test_schedule.py    # 18 tests
+│   └── test_utils.py       # 27 tests
+├── examples/               # Runnable demos with CLI
+│   └── demo.py             # Synthetic drift + approximation demo
+├── docs/                   # Extended documentation
+│   ├── API_REFERENCE.md    # Complete public API docs
+│   ├── ARCHITECTURE.md     # System design and data flow
+│   ├── DEPLOYMENT.md       # Production deployment guide
+│   ├── DEVELOPER_GUIDE.md  # Dev workflow, testing, linting
+│   ├── EXTENSIONS.md       # Optional enhancements roadmap
+│   ├── INDEX.md            # Documentation index
+│   ├── MATH.md             # Equation-by-equation math docs
+│   └── USAGE.md            # Step-by-step usage guide
+├── pyproject.toml          # Build configuration
+├── LICENSE                 # MIT License
+├── CHANGELOG.md            # Version history
+├── CONTRIBUTING.md         # Contribution guidelines
+├── CODE_OF_CONDUCT.md      # Community standards
+└── SECURITY.md             # Security policy
 ```
 
 ---
@@ -264,7 +279,7 @@ igasgd/
 
 ```bash
 pytest tests/ -v
-pytest tests/ --cov=igasgd --cov-report=term-missing
+pytest tests/ --cov=driftflow --cov-report=term-missing
 ```
 
 ---
@@ -275,12 +290,19 @@ pytest tests/ --cov=igasgd --cov-report=term-missing
 python -m build
 ```
 
+The version is read from a single source
+(`driftflow/version.py`) by `[tool.setuptools.dynamic]`, so bumping
+the version in one place updates the runtime attribute, the sdist, and
+the wheel consistently.
+
 ---
 
 ## Release
 
-Versions follow [Semantic Versioning](https://semver.org/). Releases are tagged
-via `version:X.Y.Z` commits in [CHANGELOG.md](CHANGELOG.md).
+Versions follow [Semantic Versioning](https://semver.org/). Releases are
+tagged via `version:X.Y.Z` commits in [CHANGELOG.md](CHANGELOG.md).
+Pushing a `v*` tag triggers the CI **publish** job, which builds the
+sdist and wheel and uploads them to PyPI.
 
 ---
 
@@ -290,23 +312,26 @@ via `version:X.Y.Z` commits in [CHANGELOG.md](CHANGELOG.md).
 # Install with dev dependencies
 pip install -e ".[dev]"
 
+# Run the full local CI suite (lint + typecheck + tests + build + artifact verify)
+bash scripts/ci.sh
+
 # Run tests
 pytest tests/ -v
 
 # Run tests with coverage
-pytest tests/ --cov=igasgd --cov-report=term-missing
+pytest tests/ --cov=driftflow --cov-report=term-missing
 
 # Lint
-ruff check src/ tests/
+ruff check driftflow/ tests/ examples/
 
 # Format
-ruff format src/ tests/
+ruff format driftflow/ tests/ examples/
 
 # Type check
-mypy src/igasgd
+mypy driftflow
 
 # All checks
-pytest && ruff check src/ tests/ && mypy src/igasgd
+pytest && ruff check driftflow/ tests/ examples/ && mypy driftflow
 ```
 
 ### Code Style
@@ -365,7 +390,7 @@ satisfying ``(X, A, t) -> (f_X, f_A)``).
 |    else:                                                           |
 |      dt = dt_base                                                  |
 |    dt = clip(dt, 0, T - t)                                         |
-|    X, A = euler_step / heun_step(...)                             |
+|    X, A = SOLVERS[solver](...)   # dispatch via solver registry    |
 +--------------------------------------------------------------------+
          |
          v
@@ -382,10 +407,14 @@ satisfying ``(X, A, t) -> (f_X, f_A)``).
 2. **Time monotonicity** — ``t`` never decreases; ``dt_k`` is clipped
    to ``[dt_min, dt_max]`` and then to ``[0, T - t]``.
 3. **Determinism** — fixing the ``seed`` makes the entire trajectory
-   reproducible.
-4. **Bottleneck synchrony** — both modalities share the same ``dt_k``,
+   bit-for-bit reproducible, including the per-step history in
+   ``info_dict`` (verified by the test suite).
+4. **Fail-fast validation** — empty, ragged, or otherwise malformed
+   input matrices and non-finite terminal times raise descriptive
+   ``ValueError``\ s before any work is done.
+5. **Bottleneck synchrony** — both modalities share the same ``dt_k``,
    so the X and A timelines remain aligned at every step.
-5. **Active-range inclusivity** — interval endpoints are inclusive.
+6. **Active-range inclusivity** — interval endpoints are inclusive.
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full design
 rationale, error-handling strategy, and extensibility points.
@@ -416,7 +445,7 @@ rationale, error-handling strategy, and extensibility points.
 | Testing        | [pytest](https://docs.pytest.org/) + pytest-cov      |
 | Build          | setuptools (via `pyproject.toml`)                   |
 | Docs           | Markdown in `docs/`                                 |
-| CI/CD          | GitHub Actions (lint, format, type-check, test)     |
+| CI/CD          | GitHub Actions (lint, type-check, test, build, publish) |
 
 ---
 
@@ -424,13 +453,13 @@ rationale, error-handling strategy, and extensibility points.
 
 Planned enhancements tracked in [`docs/EXTENSIONS.md`](docs/EXTENSIONS.md):
 
+- [x] Pluggable solver registry (`SOLVERS` / `register_solver`)
 - [ ] Adaptive epsilon scheduling
 - [ ] Soft clipping with smooth transitions
 - [ ] NumPy vectorized operations for performance
 - [ ] Numba JIT compilation support
 - [ ] Structured logging with configurable verbosity
 - [ ] Matplotlib visualization utilities
-- [ ] Pluggable solver registry
 - [ ] Synthetic drift test suites
 - [ ] Regression test harness
 - [ ] Additional model architecture approximations
@@ -464,7 +493,7 @@ Report vulnerabilities to **sachncs@gmail.com** — see [SECURITY.md](SECURITY.m
 If you use this reproduction in academic work, please cite the original paper:
 
 ```bibtex
-@article{igasgd2026,
+@article{driftflow2026,
   title={Information-Geometric Adaptive Sampling for Graph Diffusion},
   journal={arXiv preprint arXiv:2605.00250},
   year={2026}

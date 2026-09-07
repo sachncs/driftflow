@@ -1,6 +1,6 @@
-# igasgd Documentation Index
+# driftflow Documentation Index
 
-This directory contains comprehensive documentation for the `igasgd` package, a pure-Python reproduction of the DVS-driven adaptive sampler from *Information-Geometric Adaptive Sampling for Graph Diffusion* (arXiv:2605.00250v1).
+This directory contains comprehensive documentation for the `driftflow` package, a pure-Python reproduction of the DVS-driven adaptive sampler from *Information-Geometric Adaptive Sampling for Graph Diffusion* (arXiv:2605.00250v1).
 
 ## Quick Navigation
 

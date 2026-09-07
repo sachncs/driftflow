@@ -1,6 +1,6 @@
 # Usage Guide
 
-This guide shows how to use the `igasgd` package from a clean start, progressing from a minimal example to advanced integration patterns.
+This guide shows how to use the `driftflow` package from a clean start, progressing from a minimal example to advanced integration patterns.
 
 ---
 
@@ -10,7 +10,7 @@ No external dependencies are required.  The package is pure Python and works wit
 
 ```bash
 # From the repository root
-cd /path/to/igasgd
+cd /path/to/driftflow
 python -m pip install -e .
 ```
 
@@ -25,7 +25,7 @@ python -m pip install -e ".[dev]"
 ## 2. Minimal Example
 
 ```python
-from igasgd import (
+from driftflow import (
     CommonConfig,
     DatasetConfig,
     DVSSampler,
@@ -77,7 +77,7 @@ print(f"Final time:  {info['final_time'][0]:.6f}")
 Instead of hand-writing `DatasetConfig`, load the official Table 7 values:
 
 ```python
-from igasgd import CommonConfig, get_dataset_config, DVSSampler
+from driftflow import CommonConfig, get_dataset_config, DVSSampler
 
 common = CommonConfig()
 dataset = get_dataset_config("GruM", "QM9")
@@ -123,7 +123,7 @@ Both solvers share the same DVS-driven adaptive timestep logic.
 For smoke testing without a real denoising network:
 
 ```python
-from igasgd import GruMApproximation, make_drift_function
+from driftflow import GruMApproximation, make_drift_function
 
 approx = GruMApproximation(num_nodes=9, feature_dim=4, seed=42)
 drift = make_drift_function(approx)
@@ -147,7 +147,7 @@ The approximations are deterministic MLPs.  They do **not** perform message pass
 Any callable `g(t) -> float` works:
 
 ```python
-from igasgd import LinearSchedule, CosineSchedule, PolynomialSchedule
+from driftflow import LinearSchedule, CosineSchedule, PolynomialSchedule
 
 # Linear interpolation
 sched = LinearSchedule(sigma_min=0.01, sigma_max=0.5)
@@ -169,7 +169,7 @@ sched = lambda t: 0.1 + 0.9 * t ** 2
 The sampler returns a continuous adjacency matrix.  To decode it to discrete edges:
 
 ```python
-from igasgd import decode_adjacency
+from driftflow import decode_adjacency
 
 adjacency_bin = decode_adjacency(a_t, threshold=0.5)
 edge_count = sum(sum(row) for row in adjacency_bin)
@@ -179,7 +179,7 @@ print(f"Edges decoded: {edge_count}")
 For a smooth sigmoid decoder:
 
 ```python
-from igasgd import sigmoid_decode_adjacency
+from driftflow import sigmoid_decode_adjacency
 
 adjacency_bin = sigmoid_decode_adjacency(a_t, threshold=0.5)
 ```

@@ -6,15 +6,15 @@ Complete reference for every public module, class, function, and constant.
 
 ## Table of Contents
 
-- [igasgd.config](#igasgdconfig)
-- [igasgd.sampler](#igasgdsampler)
-- [igasgd.models](#igasgdmodels)
-- [igasgd.schedule](#igasgdschedule)
-- [igasgd.utils](#igasgdutils)
+- [driftflow.config](#driftflowconfig)
+- [driftflow.sampler](#driftflowsampler)
+- [driftflow.models](#driftflowmodels)
+- [driftflow.schedule](#driftflowschedule)
+- [driftflow.utils](#driftflowutils)
 
 ---
 
-## `igasgd.config`
+## `driftflow.config`
 
 ### `CommonConfig`
 
@@ -69,7 +69,7 @@ Lookup helper.  Raises `KeyError` with a list of available keys if the pair is n
 
 ---
 
-## `igasgd.sampler`
+## `driftflow.sampler`
 
 ### Type Aliases
 
@@ -185,6 +185,32 @@ Implements Algorithm 3: Heun predictor-corrector update.
 
 Evaluates the corrector drift at `time + timestep` using the provided `drift_function`.
 
+### `SOLVERS`
+
+```python
+SOLVERS: dict[str, SolverStep]
+```
+
+Registry mapping solver names (the `solver=` values accepted by `DVSSampler`)
+to step functions.  Populated at import time with `"Euler"` and `"Heun"`.
+
+### `register_solver(name, step_function)`
+
+```python
+def register_solver(name: str, step_function: SolverStep) -> None:
+```
+
+Registers a custom solver step under `name`, making it usable as a `solver=`
+value for `DVSSampler`.  The step function must have the uniform signature:
+
+```python
+(X, A, f_X, f_A, dt, noise, rng, drift_function, time) -> (X_next, A_next)
+```
+
+A registered solver still resolves its aggregation factor `gamma` from the
+dataset configuration (`gamma_euler` for `"Euler"`, `gamma_heun` for all
+other solvers); subclasses may override `DVSSampler.resolve_gamma`.
+
 ### `DVSSampler`
 
 ```python
@@ -205,11 +231,12 @@ class DVSSampler:
 - `noise_schedule`: Callable `t -> g_t`.
 - `common_config`: Table 6 hyperparameters.
 - `dataset_config`: Table 7 hyperparameters.
-- `solver`: `"Euler"` or `"Heun"`.
+- `solver`: Registered solver name (`"Euler"`, `"Heun"`, or any solver
+  registered via `register_solver`).
 - `seed`: Optional integer for reproducible noise.
 
 **Raises:**
-- `ValueError` if `solver` is invalid.
+- `ValueError` if `solver` is not registered in `SOLVERS`.
 - `ValueError` if the dataset config does not provide a `gamma` for the requested solver.
 
 **Properties:**
@@ -218,6 +245,8 @@ class DVSSampler:
 **Methods:**
 - `sample(initial_features, initial_adjacency, terminal_time=1.0, verbose=False) -> Tuple[List[List[float]], List[List[float]], Dict[str, List[float]]]`  
   Runs the adaptive sampling loop from `t = 0` to `terminal_time`.  Returns `(X_T, A_T, info)` where `info` contains step histories.
+  Validates that both matrices are non-empty and rectangular and that
+  `terminal_time` is finite and non-negative, raising `ValueError` otherwise.
 
 **`info` dictionary keys:**
 
@@ -235,7 +264,7 @@ class DVSSampler:
 
 ---
 
-## `igasgd.models`
+## `driftflow.models`
 
 ### `SimpleGraphDenoiser`
 
@@ -284,7 +313,7 @@ Wraps a model instance into the standard drift interface `(X, A, t) -> (f_X, f_A
 
 ---
 
-## `igasgd.schedule`
+## `driftflow.schedule`
 
 ### `NoiseSchedule`
 
@@ -331,7 +360,7 @@ Returns a schedule that always returns `value`, useful for deterministic testing
 
 ---
 
-## `igasgd.utils`
+## `driftflow.utils`
 
 ### `clip_value(...)`
 

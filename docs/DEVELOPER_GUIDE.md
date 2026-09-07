@@ -1,6 +1,6 @@
 # Developer Guide
 
-This guide covers how to build, test, lint, and extend the `igasgd` codebase.
+This guide covers how to build, test, lint, and extend the `driftflow` codebase.
 
 ---
 
@@ -8,7 +8,7 @@ This guide covers how to build, test, lint, and extend the `igasgd` codebase.
 
 ```bash
 # Clone or navigate to the repository
-cd /path/to/igasgd
+cd /path/to/driftflow
 
 # Create a virtual environment (recommended)
 python -m venv .venv
@@ -45,7 +45,7 @@ for f in tests/test_*.py; do python "$f"; done
 python -m pytest
 
 # Run with coverage
-python -m pytest --cov=src/igasgd --cov-report=term-missing
+python -m pytest --cov=driftflow --cov-report=term-missing
 
 # Run a specific test class
 python -m pytest tests/test_sampler.py::TestDVSSamplerEndToEnd -v
@@ -55,12 +55,12 @@ python -m pytest tests/test_sampler.py::TestDVSSamplerEndToEnd -v
 
 | File | Tests |
 |------|-------|
-| `test_sampler.py` | 70 |
+| `test_sampler.py` | 82 |
 | `test_config.py` | 15 |
 | `test_models.py` | 23 |
 | `test_schedule.py` | 18 |
 | `test_utils.py` | 27 |
-| **Total** | **153** |
+| **Total** | **165** |
 
 ---
 
@@ -68,10 +68,10 @@ python -m pytest tests/test_sampler.py::TestDVSSamplerEndToEnd -v
 
 ```bash
 # Lint with ruff
-ruff check src/ tests/
+ruff check driftflow/ tests/ examples/
 
 # Type check with mypy
-mypy src/igasgd
+mypy driftflow
 ```
 
 The `pyproject.toml` configures:
@@ -112,7 +112,7 @@ If you add a new test file, make sure it includes the `sys.path.insert` boilerpl
 
 ```python
 import sys
-sys.path.insert(0, __import__("os").path.join(__import__("os").path.dirname(__file__), "..", "src"))
+sys.path.insert(0, __import__("os").path.join(__import__("os").path.dirname(__file__), ".."))
 ```
 
 ---
@@ -131,7 +131,7 @@ sys.path.insert(0, __import__("os").path.join(__import__("os").path.dirname(__fi
 
 2. Add the solver branch in `DVSSampler.sample()`:
    ```python
-   if self._solver == "MySolver":
+   if self.solver == "MySolver":
        next_features, next_adjacency = my_solver_step(...)
    ```
 
@@ -152,10 +152,10 @@ Create a callable class in `schedule.py`:
 ```python
 class MySchedule:
     def __init__(self, param: float) -> None:
-        self._param = param
+        self.param = param
 
     def __call__(self, time: float) -> float:
-        return time ** self._param
+        return time ** self.param
 ```
 
 Then pass it to `DVSSampler` like any other schedule. No other changes are required.
@@ -210,15 +210,16 @@ python examples/demo.py --model GDSS --dataset QM9 --solver Heun --seed 7
 ## 11. Package Structure
 
 ```
-igasgd/
-├── src/igasgd/          — Source code
+driftflow/
+├── driftflow/           — Package source code
 │   ├── __init__.py      — Public API
+│   ├── version.py      — Single source of version
 │   ├── config.py        — Hyperparameters
-│   ├── sampler.py       — Core algorithms
+│   ├── sampler.py       — Core algorithms + solver registry
 │   ├── models.py        — Stand-in networks
 │   ├── schedule.py      — Noise schedules
 │   └── utils.py         — Helpers
-├── tests/               — Test suite (153 tests)
+├── tests/               — Test suite (165 tests)
 │   ├── test_sampler.py
 │   ├── test_config.py
 │   ├── test_models.py
@@ -241,8 +242,7 @@ igasgd/
 ├── CONTRIBUTING.md      — Contribution guidelines
 ├── CHANGELOG.md         — Version history
 ├── README.md            — Project overview
-├── FIDELITY_REPORT.md  — Paper comparison
-└── REPRODUCTION_SUMMARY.md — Technical summary
+└── SECURITY.md          — Security policy
 ```
 
 ---
@@ -251,20 +251,24 @@ igasgd/
 
 Before cutting a release:
 
-1. Run the full test suite: `python -m pytest`
-2. Run linting: `ruff check src/ tests/`
-3. Run type checking: `mypy src/igasgd`
-4. Run the demo: `python examples/demo.py --use-approximation`
-5. Verify no forbidden words in the codebase:
+1. Run the full local CI suite: `bash scripts/ci.sh` (lint, format, type
+   check, tests, demo, sdist/wheel build, artifact verification).
+2. Verify no forbidden words in the codebase:
    ```bash
-   grep -riE "TODO|FIXME|stub|mock|placeholder|dummy|pass" src/ tests/ examples/ || echo "Clean"
+   grep -riE "TODO|FIXME|stub|mock|placeholder|dummy|pass" driftflow/ tests/ examples/ || echo "Clean"
    ```
-6. Update `CHANGELOG.md` and `pyproject.toml` version.
-7. Build the package:
+3. Bump the version in the single source of truth
+   `driftflow/version.py` (this propagates to `driftflow.__version__`,
+   the sdist, and the wheel).  The `CHANGELOG.md` minimum version reference
+   in `docs/deployment.md` should be checked.
+4. Update `CHANGELOG.md` with the new release section.
+5. Build the package:
    ```bash
    python -m build
    ```
-8. Verify the sdist contains all required files:
+6. Verify the sdist contains all required files:
    ```bash
-   tar -tzf dist/igasgd-*.tar.gz | grep -E "docs|tests|examples"
+   tar -tzf dist/driftflow-*.tar.gz | grep -E "docs|tests|examples|scripts"
    ```
+7. Tag the release (`git tag vX.Y.Z`) and push.  The CI **publish** job
+   uploads the sdist and wheel to PyPI.
