@@ -1,0 +1,85 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "driftflow"
+dynamic = ["version"]
+description = "Drift Variation Score (DVS) adaptive SDE sampler for graph diffusion"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [
+    {name = "Sachin", email = "sachncs@gmail.com"}
+]
+keywords = ["graph diffusion", "adaptive sampling", "DVS", "SDE", "stochastic differential equations", "generative models", "driftflow"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Mathematics",
+    "Typing :: Typed",
+]
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "build>=1.0",
+    "pytest>=7.0",
+    "pytest-cov",
+    "mypy",
+    "ruff",
+]
+
+[project.urls]
+Homepage = "https://arxiv.org/abs/2605.00250"
+Repository = "https://github.com/sachncs/information-geometric-adaptive-sampling"
+Documentation = "https://github.com/sachncs/information-geometric-adaptive-sampling/tree/main/docs"
+Changelog = "https://github.com/sachncs/information-geometric-adaptive-sampling/blob/main/CHANGELOG.md"
+Issues = "https://github.com/sachncs/information-geometric-adaptive-sampling/issues"
+
+[tool.setuptools.packages.find]
+include = ["driftflow*"]
+
+[tool.setuptools.dynamic]
+version = {attr = "driftflow.__version__"}
+
+[tool.setuptools.package-data]
+driftflow = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+exclude = ["tests"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "D", "UP", "B", "C4", "SIM"]
+ignore = ["D100", "D104"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["D103"]
+"examples/*" = ["D103", "E402"]

@@ -1,0 +1,1399 @@
+"""Unit tests for the DVS sampler core invariants and shape consistency."""
+
+import math
+import random
+import sys
+
+import pytest
+
+# Ensure the source tree is on the path when running directly.
+sys.path.insert(0, __import__("os").path.join(__import__("os").path.dirname(__file__), ".."))
+
+from driftflow import (
+    SOLVERS,
+    CommonConfig,
+    DatasetConfig,
+    DVSSampler,
+    clip_value,
+    compute_drift_variation_score,
+    compute_timestep,
+    constant_schedule,
+    euler_step,
+    global_refresh,
+    heun_step,
+    register_solver,
+    update_ema,
+)
+
+
+class TestDriftVariationScore:
+    """Tests for Equation 13: Drift Variation Score."""
+
+    def test_basic_computation(self) -> None:
+        """Verify basic computation."""
+        f_x0 = [[0.0, 0.0], [0.0, 0.0]]
+        f_x1 = [[1.0, 0.0], [0.0, 1.0]]
+        f_a0 = [[0.0], [0.0]]
+        f_a1 = [[2.0], [2.0]]
+        g = 1.0
+        eps = 1e-12
+        v_x, v_a = compute_drift_variation_score(f_x1, f_x0, f_a1, f_a0, g, eps)
+        assert abs(v_x - 2.0) < 1e-9
+        assert abs(v_a - 8.0) < 1e-9
+
+    def test_denom_effect(self) -> None:
+        """Verify denom effect."""
+        f_x0 = [[0.0]]
+        f_x1 = [[2.0]]
+        f_a0 = [[0.0]]
+        f_a1 = [[0.0]]
+        g = 2.0
+        eps = 1e-12
+        v_x, v_a = compute_drift_variation_score(f_x1, f_x0, f_a1, f_a0, g, eps)
+        assert abs(v_x - 1.0) < 1e-9  # 4 / 4
+        assert v_a == 0.0
+
+    def test_zero_noise_with_epsilon(self) -> None:
+        """Verify zero noise with epsilon."""
+        f_x0 = [[0.0]]
+        f_x1 = [[1.0]]
+        f_a0 = [[0.0]]
+        f_a1 = [[0.0]]
+        g = 0.0
+        eps = 1e-12
+        v_x, _ = compute_drift_variation_score(f_x1, f_x0, f_a1, f_a0, g, eps)
+        assert abs(v_x - 1e12) < 1e-3  # 1 / 1e-12
+
+    def test_identical_drifts_give_zero(self) -> None:
+        """Verify identical drifts give zero."""
+        f = [[1.0, 2.0], [3.0, 4.0]]
+        v_x, v_a = compute_drift_variation_score(f, f, f, f, 1.0, 1e-12)
+        assert v_x == 0.0
+        assert v_a == 0.0
+
+    def test_large_values(self) -> None:
+        """Verify large values."""
+        f_x0 = [[0.0]]
+        f_x1 = [[1e6]]
+        f_a0 = [[0.0]]
+        f_a1 = [[0.0]]
+        g = 1.0
+        eps = 1e-12
+        v_x, v_a = compute_drift_variation_score(f_x1, f_x0, f_a1, f_a0, g, eps)
+        assert abs(v_x - 1e12) / 1e12 < 1e-9  # relative tolerance for large floats
+        assert v_a == 0.0
+
+    def test_mismatched_shapes_raises(self) -> None:
+        """Verify mismatched shapes raises."""
+        f_x0 = [[0.0, 0.0]]
+        f_x1 = [[0.0]]
+        f_a0 = [[0.0]]
+        f_a1 = [[0.0]]
+        try:
+            compute_drift_variation_score(f_x1, f_x0, f_a1, f_a0, 1.0, 1e-12)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("Expected ValueError on mismatched drift shapes")
+
+    def test_mismatched_row_count_raises(self) -> None:
+        """Verify mismatched row count raises."""
+        f_x0 = [[0.0], [0.0]]
+        f_x1 = [[0.0]]
+        f_a0 = [[0.0]]
+        f_a1 = [[0.0]]
+        try:
+            compute_drift_variation_score(f_x1, f_x0, f_a1, f_a0, 1.0, 1e-12)
+        except ValueError as exc:
+            assert "row count" in str(exc)
+        else:
+            raise AssertionError("Expected ValueError on mismatched row counts")
+
+    def test_very_small_differences(self) -> None:
+        """Verify very small differences."""
+        f_x0 = [[1e-8]]
+        f_x1 = [[1e-8 + 1e-10]]
+        f_a0 = [[0.0]]
+        f_a1 = [[0.0]]
+        g = 1.0
+        eps = 1e-12
+        v_x, v_a = compute_drift_variation_score(f_x1, f_x0, f_a1, f_a0, g, eps)
+        expected = (1e-10) ** 2  # 1e-20
+        assert abs(v_x - expected) < 1e-30
+        assert v_a == 0.0
+
+
+class TestEmaUpdate:
+    """Tests for Equation 14: Exponential Moving Average smoothing."""
+
+    def test_initial_update(self) -> None:
+        """Verify initial update."""
+        sx, sa = update_ema(1.0, 2.0, 0.0, 0.0, alpha=0.2)
+        assert abs(sx - 0.2) < 1e-9
+        assert abs(sa - 0.4) < 1e-9
+
+    def test_consecutive_updates(self) -> None:
+        """Verify consecutive updates."""
+        sx, sa = update_ema(1.0, 2.0, 0.0, 0.0, alpha=0.2)
+        sx, sa = update_ema(1.0, 2.0, sx, sa, alpha=0.2)
+        expected = 0.2 * 1.0 + 0.8 * 0.2  # 0.36
+        assert abs(sx - expected) < 1e-9
+
+    def test_alpha_one(self) -> None:
+        """Verify alpha one."""
+        sx, sa = update_ema(5.0, 7.0, 100.0, 200.0, alpha=1.0)
+        assert sx == 5.0
+        assert sa == 7.0
+
+    def test_alpha_zero(self) -> None:
+        """Verify alpha zero."""
+        sx, sa = update_ema(5.0, 7.0, 100.0, 200.0, alpha=0.0)
+        assert sx == 100.0
+        assert sa == 200.0
+
+    def test_zero_inputs(self) -> None:
+        """Verify zero inputs."""
+        sx, sa = update_ema(0.0, 0.0, 0.0, 0.0, alpha=0.2)
+        assert sx == 0.0
+        assert sa == 0.0
+
+    def test_very_small_alpha(self) -> None:
+        """Verify very small alpha."""
+        sx, sa = update_ema(100.0, 200.0, 0.0, 0.0, alpha=1e-6)
+        assert abs(sx - 1e-4) < 1e-12
+        assert abs(sa - 2e-4) < 1e-12
+
+
+class TestComputeTimestep:
+    """Tests for Equation 15: Power-law step-size scaling."""
+
+    def test_reference_curvature_returns_base(self) -> None:
+        """Verify reference curvature returns base."""
+        dt = compute_timestep(
+            smoothed_score=1.0,
+            kappa_ref=1.0,
+            dt_base=1e-3,
+            dt_min=2e-4,
+            dt_max=5e-3,
+            beta=0.5,
+            eps_num=1e-12,
+        )
+        assert abs(dt - 1e-3) < 1e-12
+
+    def test_high_curvature_clips_to_min(self) -> None:
+        """Verify high curvature clips to min."""
+        dt = compute_timestep(
+            smoothed_score=100.0,
+            kappa_ref=1.0,
+            dt_base=1e-3,
+            dt_min=2e-4,
+            dt_max=5e-3,
+            beta=0.5,
+            eps_num=1e-12,
+        )
+        assert dt < 1e-3
+        assert dt >= 2e-4
+
+    def test_low_curvature_clips_to_max(self) -> None:
+        """Verify low curvature clips to max."""
+        dt = compute_timestep(
+            smoothed_score=0.01,
+            kappa_ref=1.0,
+            dt_base=1e-3,
+            dt_min=2e-4,
+            dt_max=5e-3,
+            beta=0.5,
+            eps_num=1e-12,
+        )
+        assert abs(dt - 5e-3) < 1e-12
+
+    def test_beta_two(self) -> None:
+        """Verify beta two."""
+        dt = compute_timestep(
+            smoothed_score=4.0,
+            kappa_ref=1.0,
+            dt_base=1e-3,
+            dt_min=2e-4,
+            dt_max=5e-3,
+            beta=2.0,
+            eps_num=1e-12,
+        )
+        # raw_dt = 1e-3 * (0.25)**2 = 6.25e-5, which is below dt_min -> clips to 2e-4
+        assert abs(dt - 2e-4) < 1e-15
+
+    def test_very_small_smoothed_score(self) -> None:
+        """Verify very small smoothed score."""
+        dt = compute_timestep(
+            smoothed_score=1e-10,
+            kappa_ref=1.0,
+            dt_base=1e-3,
+            dt_min=2e-4,
+            dt_max=5e-3,
+            beta=0.5,
+            eps_num=1e-12,
+        )
+        assert abs(dt - 5e-3) < 1e-12
+
+    def test_zero_smoothed_score_with_epsilon(self) -> None:
+        """Verify zero smoothed score with epsilon."""
+        dt = compute_timestep(
+            smoothed_score=0.0,
+            kappa_ref=1.0,
+            dt_base=1e-3,
+            dt_min=2e-4,
+            dt_max=5e-3,
+            beta=0.5,
+            eps_num=1e-12,
+        )
+        # ratio = 1.0 / 1e-12 = 1e12, raw_dt = 1e-3 * sqrt(1e12) = 1e3 -> clips to max
+        assert abs(dt - 5e-3) < 1e-12
+
+    def test_very_large_smoothed_score(self) -> None:
+        """Verify very large smoothed score."""
+        dt = compute_timestep(
+            smoothed_score=1e12,
+            kappa_ref=1.0,
+            dt_base=1e-3,
+            dt_min=2e-4,
+            dt_max=5e-3,
+            beta=0.5,
+            eps_num=1e-12,
+        )
+        assert abs(dt - 2e-4) < 1e-12
+
+
+class TestGlobalRefresh:
+    """Tests for the global variation refresh."""
+
+    def test_basic_refresh(self) -> None:
+        """Verify basic refresh."""
+        sx, sa = global_refresh(1.0, 2.0, gamma=0.5)
+        assert abs(sx - 1.5) < 1e-9
+        assert abs(sa - 1.5) < 1e-9
+
+    def test_zero_gamma(self) -> None:
+        """Verify zero gamma."""
+        sx, sa = global_refresh(10.0, 20.0, gamma=0.0)
+        assert sx == 0.0
+        assert sa == 0.0
+
+    def test_one_gamma(self) -> None:
+        """Verify one gamma."""
+        sx, sa = global_refresh(2.0, 4.0, gamma=1.0)
+        assert abs(sx - 6.0) < 1e-9
+        assert abs(sa - 6.0) < 1e-9
+
+    def test_negative_gamma(self) -> None:
+        """Verify negative gamma."""
+        sx, sa = global_refresh(1.0, 2.0, gamma=-0.5)
+        assert abs(sx + 1.5) < 1e-9
+        assert abs(sa + 1.5) < 1e-9
+
+
+class TestEulerStep:
+    """Tests for Algorithm 2: Euler-Maruyama update."""
+
+    def test_output_shapes_match_input(self) -> None:
+        """Verify output shapes match input."""
+        rng = random.Random(42)
+        features = [[0.0, 0.0], [0.0, 0.0]]
+        adjacency = [[0.0], [0.0]]
+        drift_x = [[1.0, 1.0], [1.0, 1.0]]
+        drift_a = [[1.0], [1.0]]
+        dt = 0.01
+        g = 0.1
+        next_x, next_a = euler_step(features, adjacency, drift_x, drift_a, dt, g, rng)
+        assert len(next_x) == 2 and len(next_x[0]) == 2
+        assert len(next_a) == 2 and len(next_a[0]) == 1
+
+    def test_deterministic_with_zero_noise(self) -> None:
+        """Verify deterministic with zero noise."""
+        rng = random.Random(0)
+        features = [[1.0, 2.0]]
+        adjacency = [[3.0]]
+        drift_x = [[0.5, -0.5]]
+        drift_a = [[-1.0]]
+        dt = 0.1
+        g = 0.0  # No noise
+        next_x, next_a = euler_step(features, adjacency, drift_x, drift_a, dt, g, rng)
+        assert abs(next_x[0][0] - 1.05) < 1e-9
+        assert abs(next_x[0][1] - 1.95) < 1e-9
+        assert abs(next_a[0][0] - 2.9) < 1e-9
+
+    def test_noise_scale_proportional_to_sqrt_dt(self) -> None:
+        """Verify noise scale proportional to sqrt dt."""
+        rng = random.Random(123)
+        features = [[0.0]]
+        adjacency = [[0.0]]
+        drift_x = [[0.0]]
+        drift_a = [[0.0]]
+        dt = 0.04
+        g = 2.0
+        next_x, _ = euler_step(features, adjacency, drift_x, drift_a, dt, g, rng)
+        # Noise scale = g * sqrt(dt) = 2 * 0.2 = 0.4
+        # Since RNG is deterministic, the value is fixed.
+        # We only assert it's non-zero and reasonable.
+        assert next_x[0][0] != 0.0
+        assert abs(next_x[0][0]) < 2.0  # 99.7% of Gauss(0, 0.4) within this
+
+    def test_zero_dt(self) -> None:
+        """Verify zero dt."""
+        rng = random.Random(0)
+        features = [[1.0, 2.0]]
+        adjacency = [[3.0]]
+        drift_x = [[0.5, -0.5]]
+        drift_a = [[-1.0]]
+        dt = 0.0
+        g = 0.0
+        next_x, next_a = euler_step(features, adjacency, drift_x, drift_a, dt, g, rng)
+        assert next_x == features
+        assert next_a == adjacency
+
+    def test_large_dt(self) -> None:
+        """Verify large dt."""
+        rng = random.Random(0)
+        features = [[1.0]]
+        adjacency = [[1.0]]
+        drift_x = [[10.0]]
+        drift_a = [[10.0]]
+        dt = 1.0
+        g = 0.0
+        next_x, next_a = euler_step(features, adjacency, drift_x, drift_a, dt, g, rng)
+        assert abs(next_x[0][0] - 11.0) < 1e-9
+        assert abs(next_a[0][0] - 11.0) < 1e-9
+
+    def test_different_rng_produces_different_noise(self) -> None:
+        """Verify different rng produces different noise."""
+        rng1 = random.Random(1)
+        rng2 = random.Random(2)
+        features = [[0.0]]
+        adjacency = [[0.0]]
+        drift_x = [[0.0]]
+        drift_a = [[0.0]]
+        dt = 1.0
+        g = 1.0
+        x1, _ = euler_step(features, adjacency, drift_x, drift_a, dt, g, rng1)
+        x2, _ = euler_step(features, adjacency, drift_x, drift_a, dt, g, rng2)
+        assert abs(x1[0][0] - x2[0][0]) > 1e-6
+
+
+class TestHeunStep:
+    """Tests for Algorithm 3: Heun predictor-corrector update."""
+
+    def test_output_shapes_match_input(self) -> None:
+        """Verify output shapes match input."""
+        rng = random.Random(42)
+
+        def drift_fn(x, a, t):
+            return [[1.0, 1.0], [1.0, 1.0]], [[1.0], [1.0]]
+
+        features = [[0.0, 0.0], [0.0, 0.0]]
+        adjacency = [[0.0], [0.0]]
+        f1_x = [[1.0, 1.0], [1.0, 1.0]]
+        f1_a = [[1.0], [1.0]]
+        dt = 0.01
+        g = 0.1
+        next_x, next_a = heun_step(features, adjacency, f1_x, f1_a, dt, g, drift_fn, 0.0, rng)
+        assert len(next_x) == 2 and len(next_x[0]) == 2
+        assert len(next_a) == 2 and len(next_a[0]) == 1
+
+    def test_deterministic_with_zero_noise_and_constant_drift(self) -> None:
+        """Verify deterministic with zero noise and constant drift."""
+        rng = random.Random(0)
+
+        def drift_fn(x, a, t):
+            return [[1.0]], [[2.0]]
+
+        features = [[0.0]]
+        adjacency = [[0.0]]
+        f1_x = [[1.0]]
+        f1_a = [[2.0]]
+        dt = 0.1
+        g = 0.0
+        next_x, next_a = heun_step(features, adjacency, f1_x, f1_a, dt, g, drift_fn, 0.0, rng)
+        # Heun with constant drift f2 == f1 reduces to Euler
+        assert abs(next_x[0][0] - 0.1) < 1e-9
+        assert abs(next_a[0][0] - 0.2) < 1e-9
+
+    def test_non_constant_drift(self) -> None:
+        """Verify non constant drift."""
+        rng = random.Random(0)
+
+        def drift_fn(x, a, t):
+            # Linear drift: f = -x
+            return [[-v for v in row] for row in x], [[-v for v in row] for row in a]
+
+        features = [[1.0]]
+        adjacency = [[1.0]]
+        f1_x = [[-1.0]]
+        f1_a = [[-1.0]]
+        dt = 0.1
+        g = 0.0
+        next_x, next_a = heun_step(features, adjacency, f1_x, f1_a, dt, g, drift_fn, 0.0, rng)
+        # Predictor: x_hat = 1.0 + (-1.0)*0.1 = 0.9
+        # f2 = -0.9
+        # Corrector: avg = 0.5*(-1.0 + -0.9) = -0.95
+        # next = 1.0 + (-0.95)*0.1 = 0.905
+        assert abs(next_x[0][0] - 0.905) < 1e-9
+        assert abs(next_a[0][0] - 0.905) < 1e-9
+
+    def test_zero_dt(self) -> None:
+        """Verify zero dt."""
+        rng = random.Random(0)
+
+        def drift_fn(x, a, t):
+            return [[1.0]], [[2.0]]
+
+        features = [[1.0]]
+        adjacency = [[1.0]]
+        f1_x = [[1.0]]
+        f1_a = [[2.0]]
+        dt = 0.0
+        g = 0.0
+        next_x, next_a = heun_step(features, adjacency, f1_x, f1_a, dt, g, drift_fn, 0.0, rng)
+        assert next_x == features
+        assert next_a == adjacency
+
+
+class TestDVSSamplerEndToEnd:
+    """End-to-end smoke tests for the full sampler."""
+
+    def make_sampler(self, solver: str = "Euler", active_range=None):
+        """Build a DVSSampler with deterministic drift and default config."""
+        common = CommonConfig()
+        if active_range is None:
+            active_range = [(0.0, 1.0)]
+        dataset = DatasetConfig(
+            model="Test",
+            dataset="Test",
+            kappa_ref=1.0,
+            gamma_euler=0.5,
+            gamma_heun=0.5,
+            active_range=active_range,
+        )
+
+        def drift_fn(x, a, t):
+            return [[-0.5 * v for v in row] for row in x], [[-0.5 * v for v in row] for row in a]
+
+        return DVSSampler(
+            drift_function=drift_fn,
+            noise_schedule=constant_schedule(0.1),
+            common_config=common,
+            dataset_config=dataset,
+            solver=solver,
+            seed=42,
+        )
+
+    def test_euler_sampler_runs(self) -> None:
+        """Verify euler sampler runs."""
+        sampler = self.make_sampler("Euler")
+        x0 = [[1.0, 0.0], [0.0, 1.0]]
+        a0 = [[0.5], [0.5]]
+        x_t, a_t, info = sampler.sample(x0, a0, terminal_time=0.05, verbose=False)
+        assert info["total_steps"][0] >= 1.0
+        assert info["final_time"][0] >= 0.05 - 1e-6
+        assert len(info["dt"]) == int(info["total_steps"][0])
+
+    def test_gamma_property(self) -> None:
+        """Verify gamma property resolves the solver-specific factor."""
+        euler = self.make_sampler("Euler")
+        heun = self.make_sampler("Heun")
+        assert euler.gamma == 0.5
+        assert heun.gamma == 0.5
+        assert isinstance(euler.gamma, float)
+
+    def test_heun_sampler_runs(self) -> None:
+        """Verify heun sampler runs."""
+        sampler = self.make_sampler("Heun")
+        x0 = [[1.0, 0.0], [0.0, 1.0]]
+        a0 = [[0.5], [0.5]]
+        x_t, a_t, info = sampler.sample(x0, a0, terminal_time=0.05, verbose=False)
+        assert info["total_steps"][0] >= 1.0
+
+    def test_terminal_time_exactly_reached(self) -> None:
+        """Verify terminal time exactly reached."""
+        sampler = self.make_sampler("Euler")
+        x0 = [[0.0]]
+        a0 = [[0.0]]
+        x_t, a_t, info = sampler.sample(x0, a0, terminal_time=1.0, verbose=False)
+        final_t = info["final_time"][0]
+        assert abs(final_t - 1.0) < 1e-5
+
+    def test_boundary_clip_behavior(self) -> None:
+        """Verify boundary clip behavior."""
+        """When close to T, dt must be clipped to T - t."""
+        sampler = self.make_sampler("Euler")
+        x0 = [[0.0]]
+        a0 = [[0.0]]
+        terminal = 0.0015
+        _, _, info = sampler.sample(x0, a0, terminal_time=terminal, verbose=False)
+        dts = info["dt"]
+        # Step 1: dt = 0.001 (base), t becomes 0.001
+        # Step 2: remaining = 0.0005, so dt must be clipped to 0.0005 < 0.001
+        assert any(dt < 1e-3 for dt in dts)
+        assert abs(info["final_time"][0] - terminal) < 1e-12
+
+    def test_invalid_solver_raises(self) -> None:
+        """Verify invalid solver raises."""
+        try:
+            self.make_sampler("InvalidSolver")
+        except ValueError as exc:
+            assert "InvalidSolver" in str(exc)
+        else:
+            raise AssertionError("Expected ValueError for invalid solver")
+
+    def test_missing_gamma_raises(self) -> None:
+        """Verify missing gamma raises."""
+        common = CommonConfig()
+        dataset = DatasetConfig(
+            model="Test",
+            dataset="Test",
+            kappa_ref=1.0,
+            gamma_euler=None,
+            gamma_heun=None,
+            active_range=[(0.0, 1.0)],
+        )
+
+        def drift_fn(x, a, t):
+            return x, a
+
+        try:
+            DVSSampler(
+                drift_function=drift_fn,
+                noise_schedule=constant_schedule(0.0),
+                common_config=common,
+                dataset_config=dataset,
+                solver="Euler",
+                seed=0,
+            )
+        except ValueError as exc:
+            assert "gamma" in str(exc).lower() or "has no gamma" in str(exc)
+        else:
+            raise AssertionError("Expected ValueError when gamma is missing")
+
+    def test_verbose_mode_does_not_crash(self) -> None:
+        """Verify verbose mode does not crash."""
+        import io
+
+        sampler = self.make_sampler("Euler")
+        x0 = [[0.0]]
+        a0 = [[0.0]]
+        old_stdout = sys.stdout
+        sys.stdout = io.StringIO()
+        try:
+            sampler.sample(x0, a0, terminal_time=0.005, verbose=True)
+        finally:
+            sys.stdout = old_stdout
+
+    def test_inactive_range_uses_base_dt(self) -> None:
+        """Verify inactive range uses base dt."""
+        sampler = self.make_sampler("Euler", active_range=[(0.5, 1.0)])
+        x0 = [[0.0]]
+        a0 = [[0.0]]
+        _, _, info = sampler.sample(x0, a0, terminal_time=0.05, verbose=False)
+        # Before 0.5, DVS is inactive so all dts should be dt_base
+        for dt in info["dt"]:
+            assert abs(dt - CommonConfig.dt_base) < 1e-12
+        for v_x in info["v_x"]:
+            assert v_x == 0.0
+        for v_a in info["v_a"]:
+            assert v_a == 0.0
+
+    def test_info_dict_has_all_entries(self) -> None:
+        """Verify info dict has all entries."""
+        sampler = self.make_sampler("Euler")
+        x0 = [[1.0]]
+        a0 = [[1.0]]
+        _, _, info = sampler.sample(x0, a0, terminal_time=0.01, verbose=False)
+        assert len(info["steps"]) == len(info["dt"])
+        assert len(info["dt"]) == len(info["time"])
+        assert len(info["time"]) == len(info["v_x"])
+        assert len(info["v_x"]) == len(info["v_a"])
+        assert len(info["v_a"]) == len(info["smoothed_x"])
+        assert len(info["smoothed_x"]) == len(info["smoothed_a"])
+        assert "total_steps" in info
+        assert "final_time" in info
+
+    def test_different_seeds_different_trajectories(self) -> None:
+        """Verify different seeds different trajectories."""
+        sampler1 = self.make_sampler("Euler")
+        sampler2 = DVSSampler(
+            drift_function=sampler1.drift_function,
+            noise_schedule=sampler1.noise_schedule,
+            common_config=sampler1.common_config,
+            dataset_config=sampler1.dataset_config,
+            solver="Euler",
+            seed=999,
+        )
+        x0 = [[1.0, 2.0]]
+        a0 = [[0.5]]
+        x1, _, _ = sampler1.sample(x0, a0, terminal_time=0.05, verbose=False)
+        x2, _, _ = sampler2.sample(x0, a0, terminal_time=0.05, verbose=False)
+        any_diff = any(
+            abs(v1 - v2) > 1e-12
+            for r1, r2 in zip(x1, x2, strict=False)
+            for v1, v2 in zip(r1, r2, strict=False)
+        )
+        assert any_diff
+
+
+class TestActiveRanges:
+    """Tests for the active-range logic used in Table 7."""
+
+    def test_full_range_always_active(self) -> None:
+        """Verify full range always active."""
+        dataset = DatasetConfig(
+            model="GruM",
+            dataset="QM9",
+            kappa_ref=1.0,
+            gamma_euler=0.22,
+            gamma_heun=0.23,
+            active_range=[(0.0, 1.0)],
+        )
+        assert dataset.is_active(0.0)
+        assert dataset.is_active(0.5)
+        assert dataset.is_active(1.0)
+
+    def test_union_range_gdss_qm9(self) -> None:
+        """Verify union range gdss qm9."""
+        """GDSS/QM9 uses [0,0.2] U [0.95,1]."""
+        dataset = DatasetConfig(
+            model="GDSS",
+            dataset="QM9",
+            kappa_ref=1.0,
+            gamma_euler=0.68,
+            active_range=[(0.0, 0.2), (0.95, 1.0)],
+        )
+        assert dataset.is_active(0.1)
+        assert dataset.is_active(0.97)
+        assert not dataset.is_active(0.5)
+        assert not dataset.is_active(0.9)
+
+    def test_partial_range_planar(self) -> None:
+        """Verify partial range planar."""
+        """GruM/Planar uses [0.5, 1.0]."""
+        dataset = DatasetConfig(
+            model="GruM",
+            dataset="Planar",
+            kappa_ref=10.0,
+            gamma_euler=0.31,
+            gamma_heun=0.30,
+            active_range=[(0.5, 1.0)],
+        )
+        assert not dataset.is_active(0.1)
+        assert not dataset.is_active(0.49)
+        assert dataset.is_active(0.5)
+        assert dataset.is_active(0.75)
+        assert dataset.is_active(1.0)
+
+    def test_empty_range_means_always_active(self) -> None:
+        """Verify empty range means always active."""
+        dataset = DatasetConfig(
+            model="Test",
+            dataset="Test",
+            kappa_ref=1.0,
+            gamma_euler=0.5,
+            active_range=[],
+        )
+        assert dataset.is_active(-1.0)
+        assert dataset.is_active(0.5)
+        assert dataset.is_active(2.0)
+
+
+class TestBottleneckPrinciple:
+    """Tests confirming dt = min(dt_X, dt_A)."""
+
+    def test_high_curvature_dominates(self) -> None:
+        """Verify high curvature dominates."""
+        dt_x = compute_timestep(
+            smoothed_score=100.0,
+            kappa_ref=1.0,
+            dt_base=1e-3,
+            dt_min=2e-4,
+            dt_max=5e-3,
+            beta=0.5,
+            eps_num=1e-12,
+        )
+        dt_a = compute_timestep(
+            smoothed_score=0.01,
+            kappa_ref=1.0,
+            dt_base=1e-3,
+            dt_min=2e-4,
+            dt_max=5e-3,
+            beta=0.5,
+            eps_num=1e-12,
+        )
+        dt_k = min(dt_x, dt_a)
+        assert dt_k == dt_x
+        assert dt_k < dt_a
+
+    def test_equal_curvature(self) -> None:
+        """Verify equal curvature."""
+        dt_x = compute_timestep(
+            smoothed_score=1.0,
+            kappa_ref=1.0,
+            dt_base=1e-3,
+            dt_min=2e-4,
+            dt_max=5e-3,
+            beta=0.5,
+            eps_num=1e-12,
+        )
+        dt_a = compute_timestep(
+            smoothed_score=1.0,
+            kappa_ref=1.0,
+            dt_base=1e-3,
+            dt_min=2e-4,
+            dt_max=5e-3,
+            beta=0.5,
+            eps_num=1e-12,
+        )
+        dt_k = min(dt_x, dt_a)
+        assert dt_k == dt_x == dt_a
+
+    def test_adjacency_high_curvature_dominates(self) -> None:
+        """Verify adjacency high curvature dominates."""
+        dt_x = compute_timestep(
+            smoothed_score=0.01,
+            kappa_ref=1.0,
+            dt_base=1e-3,
+            dt_min=2e-4,
+            dt_max=5e-3,
+            beta=0.5,
+            eps_num=1e-12,
+        )
+        dt_a = compute_timestep(
+            smoothed_score=100.0,
+            kappa_ref=1.0,
+            dt_base=1e-3,
+            dt_min=2e-4,
+            dt_max=5e-3,
+            beta=0.5,
+            eps_num=1e-12,
+        )
+        dt_k = min(dt_x, dt_a)
+        assert dt_k == dt_a
+        assert dt_k < dt_x
+
+
+class TestClipValue:
+    """Tests for the clipping utility."""
+
+    def test_inside_range(self) -> None:
+        """Verify inside range."""
+        assert clip_value(0.5, 0.0, 1.0) == 0.5
+
+    def test_below_range(self) -> None:
+        """Verify below range."""
+        assert clip_value(-0.1, 0.0, 1.0) == 0.0
+
+    def test_above_range(self) -> None:
+        """Verify above range."""
+        assert clip_value(1.5, 0.0, 1.0) == 1.0
+
+    def test_equal_bounds(self) -> None:
+        """Verify equal bounds."""
+        assert clip_value(5.0, 3.0, 3.0) == 3.0
+
+
+class TestSolverComparison:
+    """Compare Euler and Heun on simple deterministic drift."""
+
+    def test_heun_more_accurate_than_euler_on_linear_drift(self) -> None:
+        """Verify heun more accurate than euler on linear drift."""
+        common = CommonConfig()
+        dataset = DatasetConfig(
+            model="Test",
+            dataset="Test",
+            kappa_ref=1.0,
+            gamma_euler=0.5,
+            gamma_heun=0.5,
+            active_range=[(0.0, 1.0)],
+        )
+
+        def drift_fn(x, a, t):
+            # Linear drift: f(x, t) = -x  (analytical solution decays exponentially)
+            return [[-v for v in row] for row in x], [[-v for v in row] for row in a]
+
+        euler_sampler = DVSSampler(
+            drift_function=drift_fn,
+            noise_schedule=constant_schedule(0.0),
+            common_config=common,
+            dataset_config=dataset,
+            solver="Euler",
+            seed=42,
+        )
+        heun_sampler = DVSSampler(
+            drift_function=drift_fn,
+            noise_schedule=constant_schedule(0.0),
+            common_config=common,
+            dataset_config=dataset,
+            solver="Heun",
+            seed=42,
+        )
+
+        x0 = [[1.0]]
+        a0 = [[1.0]]
+
+        x_euler, _, _ = euler_sampler.sample(x0, a0, terminal_time=0.1, verbose=False)
+        x_heun, _, _ = heun_sampler.sample(x0, a0, terminal_time=0.1, verbose=False)
+
+        # Analytical solution at t=0.1 with dt_base=0.001 (100 steps):
+        # x(t) = exp(-t) approx 0.9048
+        # Heun (2nd order) should be closer than Euler (1st order)
+        analytical = math.exp(-0.1)
+        err_euler = abs(x_euler[0][0] - analytical)
+        err_heun = abs(x_heun[0][0] - analytical)
+        assert err_heun < err_euler
+
+
+class TestRandomnessAndReproducibility:
+    """Ensure that fixing the seed yields deterministic results."""
+
+    def test_same_seed_same_output(self) -> None:
+        """Verify same seed same output."""
+        common = CommonConfig()
+        dataset = DatasetConfig(
+            model="Test",
+            dataset="Test",
+            kappa_ref=1.0,
+            gamma_euler=0.5,
+            gamma_heun=0.5,
+            active_range=[(0.0, 1.0)],
+        )
+
+        def drift_fn(x, a, t):
+            return [[-v for v in row] for row in x], [[-v for v in row] for row in a]
+
+        sampler1 = DVSSampler(
+            drift_function=drift_fn,
+            noise_schedule=constant_schedule(0.1),
+            common_config=common,
+            dataset_config=dataset,
+            solver="Euler",
+            seed=123,
+        )
+        sampler2 = DVSSampler(
+            drift_function=drift_fn,
+            noise_schedule=constant_schedule(0.1),
+            common_config=common,
+            dataset_config=dataset,
+            solver="Euler",
+            seed=123,
+        )
+
+        x0 = [[1.0, 2.0], [3.0, 4.0]]
+        a0 = [[0.5], [0.5]]
+
+        x1, a1, info1 = sampler1.sample(x0, a0, terminal_time=0.05, verbose=False)
+        x2, a2, info2 = sampler2.sample(x0, a0, terminal_time=0.05, verbose=False)
+
+        assert info1 == info2
+        assert x1 == x2
+        assert a1 == a2
+
+    def test_different_seed_different_output(self) -> None:
+        """Verify different seed different output."""
+        common = CommonConfig()
+        dataset = DatasetConfig(
+            model="Test",
+            dataset="Test",
+            kappa_ref=1.0,
+            gamma_euler=0.5,
+            gamma_heun=0.5,
+            active_range=[(0.0, 1.0)],
+        )
+
+        def drift_fn(x, a, t):
+            return [[-v for v in row] for row in x], [[-v for v in row] for row in a]
+
+        sampler1 = DVSSampler(
+            drift_function=drift_fn,
+            noise_schedule=constant_schedule(0.1),
+            common_config=common,
+            dataset_config=dataset,
+            solver="Euler",
+            seed=123,
+        )
+        sampler2 = DVSSampler(
+            drift_function=drift_fn,
+            noise_schedule=constant_schedule(0.1),
+            common_config=common,
+            dataset_config=dataset,
+            solver="Euler",
+            seed=456,
+        )
+
+        x0 = [[1.0, 2.0], [3.0, 4.0]]
+        a0 = [[0.5], [0.5]]
+
+        x1, _, _ = sampler1.sample(x0, a0, terminal_time=0.05, verbose=False)
+        x2, _, _ = sampler2.sample(x0, a0, terminal_time=0.05, verbose=False)
+
+        # At least one value should differ (with extremely high probability)
+        any_diff = any(
+            abs(v1 - v2) > 1e-12
+            for r1, r2 in zip(x1, x2, strict=False)
+            for v1, v2 in zip(r1, r2, strict=False)
+        )
+        assert any_diff
+
+
+class TestEdgeCases:
+    """Corner cases: empty graphs, single-node graphs, tiny timesteps."""
+
+    def test_single_node_graph(self) -> None:
+        """Verify single node graph."""
+        common = CommonConfig()
+        dataset = DatasetConfig(
+            model="Test",
+            dataset="Test",
+            kappa_ref=1.0,
+            gamma_euler=0.5,
+            gamma_heun=0.5,
+            active_range=[(0.0, 1.0)],
+        )
+
+        def drift_fn(x, a, t):
+            return [[0.0]], [[0.0]]
+
+        sampler = DVSSampler(
+            drift_function=drift_fn,
+            noise_schedule=constant_schedule(0.0),
+            common_config=common,
+            dataset_config=dataset,
+            solver="Euler",
+            seed=0,
+        )
+        x0 = [[1.0]]
+        a0 = [[0.0]]
+        x_t, a_t, info = sampler.sample(x0, a0, terminal_time=0.01, verbose=False)
+        assert len(x_t) == 1 and len(x_t[0]) == 1
+        assert len(a_t) == 1 and len(a_t[0]) == 1
+
+    def test_zero_terminal_time(self) -> None:
+        """Verify zero terminal time."""
+        common = CommonConfig()
+        dataset = DatasetConfig(
+            model="Test",
+            dataset="Test",
+            kappa_ref=1.0,
+            gamma_euler=0.5,
+            gamma_heun=0.5,
+            active_range=[(0.0, 1.0)],
+        )
+
+        def drift_fn(x, a, t):
+            return x, a
+
+        sampler = DVSSampler(
+            drift_function=drift_fn,
+            noise_schedule=constant_schedule(0.0),
+            common_config=common,
+            dataset_config=dataset,
+            solver="Euler",
+            seed=0,
+        )
+        x0 = [[1.0]]
+        a0 = [[0.0]]
+        x_t, a_t, info = sampler.sample(x0, a0, terminal_time=0.0, verbose=False)
+        assert info["total_steps"][0] == 0.0
+        assert x_t == x0
+        assert a_t == a0
+
+    def test_very_small_terminal_time(self) -> None:
+        """Verify very small terminal time."""
+        common = CommonConfig()
+        dataset = DatasetConfig(
+            model="Test",
+            dataset="Test",
+            kappa_ref=1.0,
+            gamma_euler=0.5,
+            gamma_heun=0.5,
+            active_range=[(0.0, 1.0)],
+        )
+
+        def drift_fn(x, a, t):
+            return x, a
+
+        sampler = DVSSampler(
+            drift_function=drift_fn,
+            noise_schedule=constant_schedule(0.0),
+            common_config=common,
+            dataset_config=dataset,
+            solver="Euler",
+            seed=0,
+        )
+        x0 = [[1.0]]
+        a0 = [[0.0]]
+        x_t, a_t, info = sampler.sample(x0, a0, terminal_time=1e-7, verbose=False)
+        assert info["total_steps"][0] == 0.0
+        assert x_t == x0
+        assert a_t == a0
+
+    def test_many_node_graph_runs(self) -> None:
+        """Verify many node graph runs."""
+        common = CommonConfig()
+        dataset = DatasetConfig(
+            model="Test",
+            dataset="Test",
+            kappa_ref=1.0,
+            gamma_euler=0.5,
+            gamma_heun=0.5,
+            active_range=[(0.0, 1.0)],
+        )
+
+        def drift_fn(x, a, t):
+            return x, a
+
+        sampler = DVSSampler(
+            drift_function=drift_fn,
+            noise_schedule=constant_schedule(0.0),
+            common_config=common,
+            dataset_config=dataset,
+            solver="Euler",
+            seed=0,
+        )
+        n = 20
+        x0 = [[1.0] * 3 for _ in range(n)]
+        a0 = [[0.0] * n for _ in range(n)]
+        x_t, a_t, info = sampler.sample(x0, a0, terminal_time=0.01, verbose=False)
+        assert len(x_t) == n
+        assert len(a_t) == n
+        assert info["total_steps"][0] >= 1.0
+
+
+class TestInfoDictStructure:
+    """Ensure the info dictionary has the expected keys and types."""
+
+    def test_keys_present(self) -> None:
+        """Verify keys present."""
+        common = CommonConfig()
+        dataset = DatasetConfig(
+            model="Test",
+            dataset="Test",
+            kappa_ref=1.0,
+            gamma_euler=0.5,
+            gamma_heun=0.5,
+            active_range=[(0.0, 1.0)],
+        )
+
+        def drift_fn(x, a, t):
+            return [[-v for v in row] for row in x], [[-v for v in row] for row in a]
+
+        sampler = DVSSampler(
+            drift_function=drift_fn,
+            noise_schedule=constant_schedule(0.0),
+            common_config=common,
+            dataset_config=dataset,
+            solver="Euler",
+            seed=42,
+        )
+        x0 = [[1.0]]
+        a0 = [[1.0]]
+        _, _, info = sampler.sample(x0, a0, terminal_time=0.01, verbose=False)
+
+        expected_keys = {
+            "steps",
+            "dt",
+            "time",
+            "v_x",
+            "v_a",
+            "smoothed_x",
+            "smoothed_a",
+            "total_steps",
+            "final_time",
+        }
+        assert set(info.keys()) == expected_keys
+        assert all(isinstance(v, list) for v in info.values())
+
+    def test_total_steps_is_scalar_list(self) -> None:
+        """Verify total steps is scalar list."""
+        common = CommonConfig()
+        dataset = DatasetConfig(
+            model="Test",
+            dataset="Test",
+            kappa_ref=1.0,
+            gamma_euler=0.5,
+            gamma_heun=0.5,
+            active_range=[(0.0, 1.0)],
+        )
+
+        def drift_fn(x, a, t):
+            return x, a
+
+        sampler = DVSSampler(
+            drift_function=drift_fn,
+            noise_schedule=constant_schedule(0.0),
+            common_config=common,
+            dataset_config=dataset,
+            solver="Euler",
+            seed=0,
+        )
+        _, _, info = sampler.sample([[0.0]], [[0.0]], terminal_time=0.01, verbose=False)
+        assert len(info["total_steps"]) == 1
+        assert len(info["final_time"]) == 1
+        assert isinstance(info["total_steps"][0], float)
+        assert isinstance(info["final_time"][0], float)
+
+
+class TestNumericalStability:
+    """Tests for numerical edge cases in the sampler core."""
+
+    def test_dvs_with_infinity_drift(self) -> None:
+        """Verify dvs with infinity drift."""
+        f_x0 = [[0.0]]
+        f_x1 = [[float("inf")]]
+        f_a0 = [[0.0]]
+        f_a1 = [[0.0]]
+        v_x, v_a = compute_drift_variation_score(f_x1, f_x0, f_a1, f_a0, 1.0, 1e-12)
+        assert v_x == float("inf")
+        assert v_a == 0.0
+
+    def test_dvs_with_nan_drift(self) -> None:
+        """Verify dvs with nan drift."""
+        f_x0 = [[0.0]]
+        f_x1 = [[float("nan")]]
+        f_a0 = [[0.0]]
+        f_a1 = [[0.0]]
+        v_x, v_a = compute_drift_variation_score(f_x1, f_x0, f_a1, f_a0, 1.0, 1e-12)
+        assert math.isnan(v_x)
+        assert v_a == 0.0
+
+    def test_ema_with_infinity(self) -> None:
+        """Verify ema with infinity."""
+        sx, sa = update_ema(float("inf"), 1.0, 0.0, 0.0, alpha=0.2)
+        assert sx == float("inf")
+        assert abs(sa - 0.2) < 1e-12
+
+    def test_timestep_with_infinity_score(self) -> None:
+        """Verify timestep with infinity score."""
+        dt = compute_timestep(
+            smoothed_score=float("inf"),
+            kappa_ref=1.0,
+            dt_base=1e-3,
+            dt_min=2e-4,
+            dt_max=5e-3,
+            beta=0.5,
+            eps_num=1e-12,
+        )
+        assert dt == 2e-4
+
+    def test_timestep_with_nan_score(self) -> None:
+        """Verify timestep with nan score."""
+        dt = compute_timestep(
+            smoothed_score=float("nan"),
+            kappa_ref=1.0,
+            dt_base=1e-3,
+            dt_min=2e-4,
+            dt_max=5e-3,
+            beta=0.5,
+            eps_num=1e-12,
+        )
+        assert math.isnan(dt)
+
+    def test_euler_with_infinity_drift(self) -> None:
+        """Verify euler with infinity drift."""
+        rng = random.Random(0)
+        features = [[0.0]]
+        adjacency = [[0.0]]
+        drift_x = [[float("inf")]]
+        drift_a = [[0.0]]
+        dt = 0.1
+        g = 0.0
+        next_x, next_a = euler_step(features, adjacency, drift_x, drift_a, dt, g, rng)
+        assert next_x[0][0] == float("inf")
+        assert next_a[0][0] == 0.0
+
+
+class TestInputValidation:
+    """Tests for the fail-fast input validation in :meth:`DVSSampler.sample`."""
+
+    def make_sampler(self, solver: str = "Euler"):
+        """Build a DVSSampler with matching linear drift for both modalities."""
+        common = CommonConfig()
+        dataset = DatasetConfig(
+            model="Test",
+            dataset="Test",
+            kappa_ref=1.0,
+            gamma_euler=0.5,
+            gamma_heun=0.5,
+            active_range=[(0.0, 1.0)],
+        )
+
+        def drift_fn(x, a, t):
+            return x, a
+
+        return DVSSampler(
+            drift_function=drift_fn,
+            noise_schedule=constant_schedule(0.1),
+            common_config=common,
+            dataset_config=dataset,
+            solver=solver,
+            seed=0,
+        )
+
+    def test_empty_features_raises(self) -> None:
+        """Verify empty features raises."""
+        sampler = self.make_sampler()
+        with pytest.raises(ValueError, match="non-empty"):
+            sampler.sample([], [[0.0]], terminal_time=1.0)
+
+    def test_ragged_features_raises(self) -> None:
+        """Verify ragged features raise."""
+        sampler = self.make_sampler()
+        with pytest.raises(ValueError, match="ragged"):
+            sampler.sample([[1.0, 2.0], [3.0]], [[0.0]], terminal_time=1.0)
+
+    def test_empty_adjacency_raises(self) -> None:
+        """Verify empty adjacency raises."""
+        sampler = self.make_sampler()
+        with pytest.raises(ValueError, match="non-empty"):
+            sampler.sample([[1.0]], [], terminal_time=1.0)
+
+    def test_empty_width_matrix_raises(self) -> None:
+        """Verify matrix with empty rows raises."""
+        sampler = self.make_sampler()
+        with pytest.raises(ValueError, match="rows must be non-empty"):
+            sampler.sample([[], []], [[0.0]], terminal_time=1.0)
+
+    def test_negative_terminal_time_raises(self) -> None:
+        """Verify negative terminal time raises."""
+        sampler = self.make_sampler()
+        with pytest.raises(ValueError, match="finite non-negative"):
+            sampler.sample([[1.0]], [[0.0]], terminal_time=-0.5)
+
+    def test_nan_terminal_time_raises(self) -> None:
+        """Verify NaN terminal time raises."""
+        sampler = self.make_sampler()
+        with pytest.raises(ValueError, match="finite non-negative"):
+            sampler.sample([[1.0]], [[0.0]], terminal_time=float("nan"))
+
+    def test_infinite_terminal_time_raises(self) -> None:
+        """Verify infinite terminal time raises."""
+        sampler = self.make_sampler()
+        with pytest.raises(ValueError, match="finite non-negative"):
+            sampler.sample([[1.0]], [[0.0]], terminal_time=float("inf"))
+
+
+class TestSolverRegistry:
+    """Tests for the pluggable solver registry extension point."""
+
+    def make_sampler(self, solver: str):
+        """Build a DVSSampler around the given solver name."""
+        common = CommonConfig()
+        dataset = DatasetConfig(
+            model="Test",
+            dataset="Test",
+            kappa_ref=1.0,
+            gamma_euler=0.5,
+            gamma_heun=0.5,
+            active_range=[(0.0, 1.0)],
+        )
+
+        def drift_fn(x, a, t):
+            return [[-v for v in row] for row in x], [[-v for v in row] for row in a]
+
+        return DVSSampler(
+            drift_function=drift_fn,
+            noise_schedule=constant_schedule(0.1),
+            common_config=common,
+            dataset_config=dataset,
+            solver=solver,
+            seed=0,
+        )
+
+    def test_builtin_solvers_registered(self) -> None:
+        """Verify builtin solvers registered."""
+        assert "Euler" in SOLVERS
+        assert "Heun" in SOLVERS
+
+    def test_registered_solver_is_usable_by_sampler(self) -> None:
+        """Verify registered solver is usable by sampler."""
+
+        def midpoint_step(
+            features,
+            adjacency,
+            drift_features,
+            drift_adjacency,
+            timestep,
+            noise_scale,
+            rng,
+            drift_function,
+            time,
+        ):
+            del drift_function  # midpoint in this test reuses the first drift
+
+            def update(state, drift):
+                new_state = []
+                for s_row, d_row in zip(state, drift, strict=False):
+                    new_row = []
+                    for s, d in zip(s_row, d_row, strict=False):
+                        noise = noise_scale * rng.gauss(0.0, 1.0)
+                        new_row.append(s + d * timestep + noise)
+                    new_state.append(new_row)
+                return new_state
+
+            return update(features, drift_features), update(adjacency, drift_adjacency)
+
+        register_solver("MidpointTest", midpoint_step)
+        try:
+            sampler = self.make_sampler("MidpointTest")
+            x0 = [[1.0, 0.0], [0.0, 1.0]]
+            a0 = [[0.5], [0.5]]
+            x_t, a_t, info = sampler.sample(x0, a0, terminal_time=0.05, verbose=False)
+            assert info["total_steps"][0] >= 1.0
+            assert len(x_t) == 2
+        finally:
+            SOLVERS.pop("MidpointTest", None)
+
+    def test_unregistered_solver_raises(self) -> None:
+        """Verify unregistered solver raises."""
+        with pytest.raises(ValueError, match="solver must be one of"):
+            self.make_sampler("DefinitelyNotASolver")
+
+
+if __name__ == "__main__":
+    # Run all test classes manually when executed directly.
+    import inspect
+
+    test_classes = [
+        TestDriftVariationScore,
+        TestEmaUpdate,
+        TestComputeTimestep,
+        TestGlobalRefresh,
+        TestEulerStep,
+        TestHeunStep,
+        TestDVSSamplerEndToEnd,
+        TestActiveRanges,
+        TestBottleneckPrinciple,
+        TestClipValue,
+        TestSolverComparison,
+        TestRandomnessAndReproducibility,
+        TestEdgeCases,
+        TestInfoDictStructure,
+        TestNumericalStability,
+        TestInputValidation,
+        TestSolverRegistry,
+    ]
+
+    total = 0
+    failures = 0
+    for cls in test_classes:
+        instance = cls()
+        for name, method in inspect.getmembers(instance, predicate=inspect.ismethod):
+            if name.startswith("test_"):
+                total += 1
+                try:
+                    method()
+                except AssertionError as exc:
+                    failures += 1
+                    print(f"FAIL: {cls.__name__}.{name} -- {exc}")
+                except Exception as exc:
+                    failures += 1
+                    print(f"ERROR: {cls.__name__}.{name} -- {exc}")
+
+    if failures:
+        print(f"\n{failures}/{total} tests failed.")
+        raise SystemExit(1)
+    else:
+        print(f"All {total} tests passed.")
