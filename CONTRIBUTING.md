@@ -23,12 +23,12 @@ This project follows the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.
 1. Fork the repository on GitHub
 2. Clone your fork locally:
    ```bash
-   git clone https://github.com/YOUR_USERNAME/driftflow.git
+   git clone https://github.com/sachncs/driftflow.git
    cd driftflow
    ```
 3. Add the upstream remote:
    ```bash
-   git remote add upstream https://github.com/example/driftflow.git
+   git remote add upstream https://github.com/sachncs/driftflow.git
    ```
 4. Create a branch for your changes:
    ```bash
