@@ -26,14 +26,6 @@ from driftflow import (
 )
 
 
-def make_matrix(rows: int, cols: int, fill: float = 1.0) -> list[list[float]]:
-    return [[fill for _ in range(cols)] for _ in range(rows)]
-
-
-def make_random_matrix(rows: int, cols: int, rng: random.Random) -> list[list[float]]:
-    return [[rng.random() for _ in range(cols)] for _ in range(rows)]
-
-
 class TestDriftVariationScore:
     """Tests for Equation 13: Drift Variation Score."""
 
@@ -842,8 +834,8 @@ class TestSolverComparison:
         x0 = [[1.0]]
         a0 = [[1.0]]
 
-        x_euler, a_euler, _ = euler_sampler.sample(x0, a0, terminal_time=0.1, verbose=False)
-        x_heun, a_heun, _ = heun_sampler.sample(x0, a0, terminal_time=0.1, verbose=False)
+        x_euler, _, _ = euler_sampler.sample(x0, a0, terminal_time=0.1, verbose=False)
+        x_heun, _, _ = heun_sampler.sample(x0, a0, terminal_time=0.1, verbose=False)
 
         # Analytical solution at t=0.1 with dt_base=0.001 (100 steps):
         # x(t) = exp(-t) approx 0.9048
@@ -1330,8 +1322,6 @@ class TestSolverRegistry:
             time,
         ):
             del drift_function  # midpoint in this test reuses the first drift
-            mid_time = time + 0.5 * timestep
-            _ = mid_time
 
             def update(state, drift):
                 new_state = []

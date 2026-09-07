@@ -157,7 +157,7 @@ def run_demo(
     print(f"Initial graph: {len(features_0)} nodes, feature dim={len(features_0[0])}")
     print("-" * 60)
 
-    features_t, adjacency_t, info = sampler.sample(
+    _, adjacency_t, info = sampler.sample(
         initial_features=features_0,
         initial_adjacency=adjacency_0,
         terminal_time=1.0,
