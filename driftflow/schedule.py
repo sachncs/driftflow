@@ -84,8 +84,8 @@ class LinearSchedule:
             sigma_min: Noise scale at ``t = 0``.
             sigma_max: Noise scale at ``t = 1``.
         """
-        self._sigma_min = sigma_min
-        self._sigma_max = sigma_max
+        self.sigma_min = sigma_min
+        self.sigma_max = sigma_max
 
     def __call__(self, time: float) -> float:
         """Evaluate the linear noise schedule at the given diffusion time.
@@ -96,7 +96,7 @@ class LinearSchedule:
         Returns:
             The interpolated noise scale ``g(t)``.
         """
-        return self._sigma_max * time + self._sigma_min * (1.0 - time)
+        return self.sigma_max * time + self.sigma_min * (1.0 - time)
 
 
 class CosineSchedule:
@@ -128,7 +128,7 @@ class CosineSchedule:
                 ``offset = 0.008``; smaller values move the singularity
                 closer to ``t = 0`` but may produce numerical issues.
         """
-        self._offset = offset
+        self.offset = offset
 
     def __call__(self, time: float) -> float:
         """Evaluate the approximate cosine noise schedule.
@@ -147,7 +147,7 @@ class CosineSchedule:
               mathematically infinite -- callers may want to clamp
               the diffusion horizon slightly below ``1`` for stability.
         """
-        return math.tan((time + self._offset) / (1.0 + self._offset) * math.pi / 2.0)
+        return math.tan((time + self.offset) / (1.0 + self.offset) * math.pi / 2.0)
 
 
 class PolynomialSchedule:
@@ -179,9 +179,9 @@ class PolynomialSchedule:
             sigma_min: Minimum noise scale (floor).
             sigma_max: Maximum noise scale (at ``t = 1``).
         """
-        self._exponent = exponent
-        self._sigma_min = sigma_min
-        self._sigma_max = sigma_max
+        self.exponent = exponent
+        self.sigma_min = sigma_min
+        self.sigma_max = sigma_max
 
     def __call__(self, time: float) -> float:
         """Evaluate the polynomial noise schedule.
@@ -198,8 +198,8 @@ class PolynomialSchedule:
             * Negative ``time`` raises ``ValueError`` (Python's
               behaviour for ``neg ** non-integer``).
         """
-        powered: float = time**self._exponent
-        return self._sigma_max * powered + self._sigma_min
+        powered: float = time**self.exponent
+        return self.sigma_max * powered + self.sigma_min
 
 
 def constant_schedule(value: float = 1.0) -> NoiseSchedule:
@@ -222,7 +222,7 @@ def constant_schedule(value: float = 1.0) -> NoiseSchedule:
         (0.5, 0.5, 0.5)
     """
 
-    def _schedule(_time: float) -> float:
+    def schedule(time: float) -> float:
         return value
 
-    return _schedule
+    return schedule

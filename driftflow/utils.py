@@ -8,12 +8,12 @@ while another uses inclusive).
 Architecture overview
 ---------------------
 * :func:`clip_value` -- scalar clamp with NaN propagation.  Used by
-  :func:`~igasgd.sampler.compute_timestep` to enforce
+  :func:`~driftflow.sampler.compute_timestep` to enforce
   ``[dt_min, dt_max]`` and by future code that needs to clamp a scalar
   to a closed interval.
 * :func:`in_active_range` -- interval membership predicate with the
   convention that an empty list of ranges means "always active".
-  Mirrors :meth:`igasgd.config.DatasetConfig.is_active` for callers
+  Mirrors :meth:`driftflow.config.DatasetConfig.is_active` for callers
   that have a list of tuples rather than a :class:`DatasetConfig`.
 * :func:`decode_adjacency` -- threshold binarizer for continuous
   adjacency matrices.
@@ -41,7 +41,7 @@ import math
 def clip_value(value: float, lower_bound: float, upper_bound: float) -> float:
     """Clamp ``value`` to the closed interval ``[lower_bound, upper_bound]``.
 
-    Used by :func:`~igasgd.sampler.compute_timestep` to enforce the
+    Used by :func:`~driftflow.sampler.compute_timestep` to enforce the
     admissible timestep interval and by any future code that needs to
     enforce bounded scalars.  NaN inputs are propagated unchanged so
     that numerical failures surface rather than being silently

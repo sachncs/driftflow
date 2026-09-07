@@ -4,10 +4,13 @@ import math
 import random
 import sys
 
-# Ensure the source tree is on the path when running directly.
-sys.path.insert(0, __import__("os").path.join(__import__("os").path.dirname(__file__), "..", "src"))
+import pytest
 
-from igasgd import (
+# Ensure the source tree is on the path when running directly.
+sys.path.insert(0, __import__("os").path.join(__import__("os").path.dirname(__file__), ".."))
+
+from driftflow import (
+    SOLVERS,
     CommonConfig,
     DatasetConfig,
     DVSSampler,
@@ -18,15 +21,16 @@ from igasgd import (
     euler_step,
     global_refresh,
     heun_step,
+    register_solver,
     update_ema,
 )
 
 
-def _make_matrix(rows: int, cols: int, fill: float = 1.0) -> list[list[float]]:
+def make_matrix(rows: int, cols: int, fill: float = 1.0) -> list[list[float]]:
     return [[fill for _ in range(cols)] for _ in range(rows)]
 
 
-def _make_random_matrix(rows: int, cols: int, rng: random.Random) -> list[list[float]]:
+def make_random_matrix(rows: int, cols: int, rng: random.Random) -> list[list[float]]:
     return [[rng.random() for _ in range(cols)] for _ in range(rows)]
 
 
@@ -99,6 +103,19 @@ class TestDriftVariationScore:
             pass
         else:
             raise AssertionError("Expected ValueError on mismatched drift shapes")
+
+    def test_mismatched_row_count_raises(self) -> None:
+        """Verify mismatched row count raises."""
+        f_x0 = [[0.0], [0.0]]
+        f_x1 = [[0.0]]
+        f_a0 = [[0.0]]
+        f_a1 = [[0.0]]
+        try:
+            compute_drift_variation_score(f_x1, f_x0, f_a1, f_a0, 1.0, 1e-12)
+        except ValueError as exc:
+            assert "row count" in str(exc)
+        else:
+            raise AssertionError("Expected ValueError on mismatched row counts")
 
     def test_very_small_differences(self) -> None:
         """Verify very small differences."""
@@ -449,7 +466,8 @@ class TestHeunStep:
 class TestDVSSamplerEndToEnd:
     """End-to-end smoke tests for the full sampler."""
 
-    def _make_sampler(self, solver: str = "Euler", active_range=None):
+    def make_sampler(self, solver: str = "Euler", active_range=None):
+        """Build a DVSSampler with deterministic drift and default config."""
         common = CommonConfig()
         if active_range is None:
             active_range = [(0.0, 1.0)]
@@ -476,7 +494,7 @@ class TestDVSSamplerEndToEnd:
 
     def test_euler_sampler_runs(self) -> None:
         """Verify euler sampler runs."""
-        sampler = self._make_sampler("Euler")
+        sampler = self.make_sampler("Euler")
         x0 = [[1.0, 0.0], [0.0, 1.0]]
         a0 = [[0.5], [0.5]]
         x_t, a_t, info = sampler.sample(x0, a0, terminal_time=0.05, verbose=False)
@@ -484,9 +502,17 @@ class TestDVSSamplerEndToEnd:
         assert info["final_time"][0] >= 0.05 - 1e-6
         assert len(info["dt"]) == int(info["total_steps"][0])
 
+    def test_gamma_property(self) -> None:
+        """Verify gamma property resolves the solver-specific factor."""
+        euler = self.make_sampler("Euler")
+        heun = self.make_sampler("Heun")
+        assert euler.gamma == 0.5
+        assert heun.gamma == 0.5
+        assert isinstance(euler.gamma, float)
+
     def test_heun_sampler_runs(self) -> None:
         """Verify heun sampler runs."""
-        sampler = self._make_sampler("Heun")
+        sampler = self.make_sampler("Heun")
         x0 = [[1.0, 0.0], [0.0, 1.0]]
         a0 = [[0.5], [0.5]]
         x_t, a_t, info = sampler.sample(x0, a0, terminal_time=0.05, verbose=False)
@@ -494,7 +520,7 @@ class TestDVSSamplerEndToEnd:
 
     def test_terminal_time_exactly_reached(self) -> None:
         """Verify terminal time exactly reached."""
-        sampler = self._make_sampler("Euler")
+        sampler = self.make_sampler("Euler")
         x0 = [[0.0]]
         a0 = [[0.0]]
         x_t, a_t, info = sampler.sample(x0, a0, terminal_time=1.0, verbose=False)
@@ -504,7 +530,7 @@ class TestDVSSamplerEndToEnd:
     def test_boundary_clip_behavior(self) -> None:
         """Verify boundary clip behavior."""
         """When close to T, dt must be clipped to T - t."""
-        sampler = self._make_sampler("Euler")
+        sampler = self.make_sampler("Euler")
         x0 = [[0.0]]
         a0 = [[0.0]]
         terminal = 0.0015
@@ -518,7 +544,7 @@ class TestDVSSamplerEndToEnd:
     def test_invalid_solver_raises(self) -> None:
         """Verify invalid solver raises."""
         try:
-            self._make_sampler("InvalidSolver")
+            self.make_sampler("InvalidSolver")
         except ValueError as exc:
             assert "InvalidSolver" in str(exc)
         else:
@@ -556,21 +582,20 @@ class TestDVSSamplerEndToEnd:
     def test_verbose_mode_does_not_crash(self) -> None:
         """Verify verbose mode does not crash."""
         import io
-        import sys as _sys
 
-        sampler = self._make_sampler("Euler")
+        sampler = self.make_sampler("Euler")
         x0 = [[0.0]]
         a0 = [[0.0]]
-        old_stdout = _sys.stdout
-        _sys.stdout = io.StringIO()
+        old_stdout = sys.stdout
+        sys.stdout = io.StringIO()
         try:
             sampler.sample(x0, a0, terminal_time=0.005, verbose=True)
         finally:
-            _sys.stdout = old_stdout
+            sys.stdout = old_stdout
 
     def test_inactive_range_uses_base_dt(self) -> None:
         """Verify inactive range uses base dt."""
-        sampler = self._make_sampler("Euler", active_range=[(0.5, 1.0)])
+        sampler = self.make_sampler("Euler", active_range=[(0.5, 1.0)])
         x0 = [[0.0]]
         a0 = [[0.0]]
         _, _, info = sampler.sample(x0, a0, terminal_time=0.05, verbose=False)
@@ -584,7 +609,7 @@ class TestDVSSamplerEndToEnd:
 
     def test_info_dict_has_all_entries(self) -> None:
         """Verify info dict has all entries."""
-        sampler = self._make_sampler("Euler")
+        sampler = self.make_sampler("Euler")
         x0 = [[1.0]]
         a0 = [[1.0]]
         _, _, info = sampler.sample(x0, a0, terminal_time=0.01, verbose=False)
@@ -599,12 +624,12 @@ class TestDVSSamplerEndToEnd:
 
     def test_different_seeds_different_trajectories(self) -> None:
         """Verify different seeds different trajectories."""
-        sampler1 = self._make_sampler("Euler")
+        sampler1 = self.make_sampler("Euler")
         sampler2 = DVSSampler(
-            drift_function=sampler1._drift_function,
-            noise_schedule=sampler1._noise_schedule,
-            common_config=sampler1._common_config,
-            dataset_config=sampler1._dataset_config,
+            drift_function=sampler1.drift_function,
+            noise_schedule=sampler1.noise_schedule,
+            common_config=sampler1.common_config,
+            dataset_config=sampler1.dataset_config,
             solver="Euler",
             seed=999,
         )
@@ -870,11 +895,9 @@ class TestRandomnessAndReproducibility:
         x1, a1, info1 = sampler1.sample(x0, a0, terminal_time=0.05, verbose=False)
         x2, a2, info2 = sampler2.sample(x0, a0, terminal_time=0.05, verbose=False)
 
-        assert info1["dt"] == info2["dt"]
-        assert info1["total_steps"] == info2["total_steps"]
-        for r1, r2 in zip(x1, x2, strict=False):
-            for v1, v2 in zip(r1, r2, strict=False):
-                assert abs(v1 - v2) < 1e-12
+        assert info1 == info2
+        assert x1 == x2
+        assert a1 == a2
 
     def test_different_seed_different_output(self) -> None:
         """Verify different seed different output."""
@@ -1190,6 +1213,155 @@ class TestNumericalStability:
         assert next_a[0][0] == 0.0
 
 
+class TestInputValidation:
+    """Tests for the fail-fast input validation in :meth:`DVSSampler.sample`."""
+
+    def make_sampler(self, solver: str = "Euler"):
+        """Build a DVSSampler with matching linear drift for both modalities."""
+        common = CommonConfig()
+        dataset = DatasetConfig(
+            model="Test",
+            dataset="Test",
+            kappa_ref=1.0,
+            gamma_euler=0.5,
+            gamma_heun=0.5,
+            active_range=[(0.0, 1.0)],
+        )
+
+        def drift_fn(x, a, t):
+            return x, a
+
+        return DVSSampler(
+            drift_function=drift_fn,
+            noise_schedule=constant_schedule(0.1),
+            common_config=common,
+            dataset_config=dataset,
+            solver=solver,
+            seed=0,
+        )
+
+    def test_empty_features_raises(self) -> None:
+        """Verify empty features raises."""
+        sampler = self.make_sampler()
+        with pytest.raises(ValueError, match="non-empty"):
+            sampler.sample([], [[0.0]], terminal_time=1.0)
+
+    def test_ragged_features_raises(self) -> None:
+        """Verify ragged features raise."""
+        sampler = self.make_sampler()
+        with pytest.raises(ValueError, match="ragged"):
+            sampler.sample([[1.0, 2.0], [3.0]], [[0.0]], terminal_time=1.0)
+
+    def test_empty_adjacency_raises(self) -> None:
+        """Verify empty adjacency raises."""
+        sampler = self.make_sampler()
+        with pytest.raises(ValueError, match="non-empty"):
+            sampler.sample([[1.0]], [], terminal_time=1.0)
+
+    def test_empty_width_matrix_raises(self) -> None:
+        """Verify matrix with empty rows raises."""
+        sampler = self.make_sampler()
+        with pytest.raises(ValueError, match="rows must be non-empty"):
+            sampler.sample([[], []], [[0.0]], terminal_time=1.0)
+
+    def test_negative_terminal_time_raises(self) -> None:
+        """Verify negative terminal time raises."""
+        sampler = self.make_sampler()
+        with pytest.raises(ValueError, match="finite non-negative"):
+            sampler.sample([[1.0]], [[0.0]], terminal_time=-0.5)
+
+    def test_nan_terminal_time_raises(self) -> None:
+        """Verify NaN terminal time raises."""
+        sampler = self.make_sampler()
+        with pytest.raises(ValueError, match="finite non-negative"):
+            sampler.sample([[1.0]], [[0.0]], terminal_time=float("nan"))
+
+    def test_infinite_terminal_time_raises(self) -> None:
+        """Verify infinite terminal time raises."""
+        sampler = self.make_sampler()
+        with pytest.raises(ValueError, match="finite non-negative"):
+            sampler.sample([[1.0]], [[0.0]], terminal_time=float("inf"))
+
+
+class TestSolverRegistry:
+    """Tests for the pluggable solver registry extension point."""
+
+    def make_sampler(self, solver: str):
+        """Build a DVSSampler around the given solver name."""
+        common = CommonConfig()
+        dataset = DatasetConfig(
+            model="Test",
+            dataset="Test",
+            kappa_ref=1.0,
+            gamma_euler=0.5,
+            gamma_heun=0.5,
+            active_range=[(0.0, 1.0)],
+        )
+
+        def drift_fn(x, a, t):
+            return [[-v for v in row] for row in x], [[-v for v in row] for row in a]
+
+        return DVSSampler(
+            drift_function=drift_fn,
+            noise_schedule=constant_schedule(0.1),
+            common_config=common,
+            dataset_config=dataset,
+            solver=solver,
+            seed=0,
+        )
+
+    def test_builtin_solvers_registered(self) -> None:
+        """Verify builtin solvers registered."""
+        assert "Euler" in SOLVERS
+        assert "Heun" in SOLVERS
+
+    def test_registered_solver_is_usable_by_sampler(self) -> None:
+        """Verify registered solver is usable by sampler."""
+
+        def midpoint_step(
+            features,
+            adjacency,
+            drift_features,
+            drift_adjacency,
+            timestep,
+            noise_scale,
+            rng,
+            drift_function,
+            time,
+        ):
+            del drift_function  # midpoint in this test reuses the first drift
+            mid_time = time + 0.5 * timestep
+            _ = mid_time
+
+            def update(state, drift):
+                new_state = []
+                for s_row, d_row in zip(state, drift, strict=False):
+                    new_row = []
+                    for s, d in zip(s_row, d_row, strict=False):
+                        noise = noise_scale * rng.gauss(0.0, 1.0)
+                        new_row.append(s + d * timestep + noise)
+                    new_state.append(new_row)
+                return new_state
+
+            return update(features, drift_features), update(adjacency, drift_adjacency)
+
+        register_solver("MidpointTest", midpoint_step)
+        try:
+            sampler = self.make_sampler("MidpointTest")
+            x0 = [[1.0, 0.0], [0.0, 1.0]]
+            a0 = [[0.5], [0.5]]
+            x_t, a_t, info = sampler.sample(x0, a0, terminal_time=0.05, verbose=False)
+            assert info["total_steps"][0] >= 1.0
+            assert len(x_t) == 2
+        finally:
+            SOLVERS.pop("MidpointTest", None)
+
+    def test_unregistered_solver_raises(self) -> None:
+        """Verify unregistered solver raises."""
+        with pytest.raises(ValueError, match="solver must be one of"):
+            self.make_sampler("DefinitelyNotASolver")
+
+
 if __name__ == "__main__":
     # Run all test classes manually when executed directly.
     import inspect
@@ -1210,6 +1382,8 @@ if __name__ == "__main__":
         TestEdgeCases,
         TestInfoDictStructure,
         TestNumericalStability,
+        TestInputValidation,
+        TestSolverRegistry,
     ]
 
     total = 0

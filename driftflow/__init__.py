@@ -1,6 +1,6 @@
-"""Top-level package for the **igasgd** library.
+"""Top-level package for the **driftflow** library.
 
-``igasgd`` (Information-Geometric Adaptive Sampling for Graph Diffusion) is a
+``driftflow`` (Information-Geometric Adaptive Sampling for Graph Diffusion) is a
 pure-Python implementation of the Drift Variation Score (DVS) adaptive sampler
 introduced in the paper:
 
@@ -15,7 +15,7 @@ Package layout
 --------------
 ::
 
-    igasgd/
+    driftflow/
         config    # Hyperparameter dataclasses (Tables 6 & 7 of the paper)
         sampler   # DVS sampler core (Algorithms 1-3) and solver steps
         models    # Simplified stand-in denoising networks for GruM / GDSS
@@ -30,9 +30,11 @@ runtime dependencies.  All numerical primitives operate on nested
 that restrict heavy scientific stacks (e.g. educational tools, lightweight
 inference servers).
 
-Every public name exported here is part of the stable API; private helpers
-(those starting with an underscore) are implementation details and may change
-without notice.
+Every name exported here is part of the stable public API.  Submodules also
+expose internal helpers (such as ``driftflow.sampler.squared_l2_difference``)
+directly; these are public but intentionally not re-exported at the package
+level, so the surface documented in ``docs/API_REFERENCE.md`` stays the
+authoritative reference.
 
 References:
 ----------
@@ -41,17 +43,17 @@ References:
 * Architecture overview: ``docs/ARCHITECTURE.md``
 """
 
-__version__ = "0.1.0"
-
 from .config import DATASET_CONFIGS, CommonConfig, DatasetConfig, get_dataset_config
 from .models import GDSSApproximation, GruMApproximation, SimpleGraphDenoiser, make_drift_function
 from .sampler import (
+    SOLVERS,
     DVSSampler,
     compute_drift_variation_score,
     compute_timestep,
     euler_step,
     global_refresh,
     heun_step,
+    register_solver,
     update_ema,
 )
 from .schedule import (
@@ -62,8 +64,10 @@ from .schedule import (
     constant_schedule,
 )
 from .utils import clip_value, decode_adjacency, in_active_range, sigmoid_decode_adjacency
+from .version import __version__
 
 __all__ = [
+    "__version__",
     # Config
     "CommonConfig",
     "DatasetConfig",
@@ -76,6 +80,8 @@ __all__ = [
     "make_drift_function",
     # Sampler
     "DVSSampler",
+    "SOLVERS",
+    "register_solver",
     "compute_drift_variation_score",
     "update_ema",
     "compute_timestep",

@@ -5,9 +5,9 @@ import random
 import sys
 
 # Ensure the source tree is on the path when running directly.
-sys.path.insert(0, __import__("os").path.join(__import__("os").path.dirname(__file__), "..", "src"))
+sys.path.insert(0, __import__("os").path.join(__import__("os").path.dirname(__file__), ".."))
 
-from igasgd import GDSSApproximation, GruMApproximation, SimpleGraphDenoiser, make_drift_function
+from driftflow import GDSSApproximation, GruMApproximation, SimpleGraphDenoiser, make_drift_function
 
 
 class TestSimpleGraphDenoiser:
@@ -99,7 +99,7 @@ class TestGruMApproximation:
     def test_hidden_dim_is_32(self) -> None:
         """Verify hidden dim is 32."""
         approx = GruMApproximation(num_nodes=5, feature_dim=3, seed=42)
-        assert approx._hidden_dim == 32
+        assert approx.hidden_dim == 32
 
     def test_callable_interface(self) -> None:
         """Verify callable interface."""
@@ -122,7 +122,7 @@ class TestGDSSApproximation:
     def test_hidden_dim_is_24(self) -> None:
         """Verify hidden dim is 24."""
         approx = GDSSApproximation(num_nodes=5, feature_dim=3, seed=42)
-        assert approx._hidden_dim == 24
+        assert approx.hidden_dim == 24
 
     def test_callable_interface(self) -> None:
         """Verify callable interface."""
@@ -167,10 +167,10 @@ class TestInternalHelpers:
 
     def test_xavier_uniform_shape_and_bounds(self) -> None:
         """Verify xavier uniform shape and bounds."""
-        from igasgd.models import _xavier_uniform
+        from driftflow.models import xavier_uniform
 
         rng = random.Random(42)
-        mat = _xavier_uniform(rows=3, cols=4, rng=rng)
+        mat = xavier_uniform(rows=3, cols=4, rng=rng)
         assert len(mat) == 3
         assert len(mat[0]) == 4
         limit = math.sqrt(6.0 / (3 + 4))
@@ -180,68 +180,68 @@ class TestInternalHelpers:
 
     def test_matvec_basic(self) -> None:
         """Verify matvec basic."""
-        from igasgd.models import _matvec
+        from driftflow.models import matvec
 
         matrix = [[1.0, 2.0], [3.0, 4.0]]
         vector = [1.0, 0.0]
-        result = _matvec(matrix, vector)
+        result = matvec(matrix, vector)
         assert result == [1.0, 3.0]
 
     def test_matvec_identity(self) -> None:
         """Verify matvec identity."""
-        from igasgd.models import _matvec
+        from driftflow.models import matvec
 
         matrix = [[1.0, 0.0], [0.0, 1.0]]
         vector = [5.0, -3.0]
-        result = _matvec(matrix, vector)
+        result = matvec(matrix, vector)
         assert result == [5.0, -3.0]
 
     def test_matmul_basic(self) -> None:
         """Verify matmul basic."""
-        from igasgd.models import _matmul
+        from driftflow.models import matmul
 
         a = [[1.0, 2.0], [3.0, 4.0]]
         b = [[0.0, 1.0], [0.0, 0.0]]
-        result = _matmul(a, b)
+        result = matmul(a, b)
         assert result == [[0.0, 1.0], [0.0, 3.0]]
 
     def test_matmul_identity(self) -> None:
         """Verify matmul identity."""
-        from igasgd.models import _matmul
+        from driftflow.models import matmul
 
         a = [[1.0, 2.0], [3.0, 4.0]]
         b = [[1.0, 0.0], [0.0, 1.0]]
-        result = _matmul(a, b)
+        result = matmul(a, b)
         assert result == a
 
     def test_relu_positive_and_negative(self) -> None:
         """Verify relu positive and negative."""
-        from igasgd.models import _relu
+        from driftflow.models import relu
 
         values = [-2.0, -1.0, 0.0, 1.0, 2.0]
-        result = _relu(values)
+        result = relu(values)
         assert result == [0.0, 0.0, 0.0, 1.0, 2.0]
 
     def test_time_embedding_length(self) -> None:
         """Verify time embedding length."""
-        from igasgd.models import _time_embedding
+        from driftflow.models import time_embedding
 
-        emb = _time_embedding(0.5, dim=8)
+        emb = time_embedding(0.5, dim=8)
         assert len(emb) == 8
 
     def test_time_embedding_varies_with_time(self) -> None:
         """Verify time embedding varies with time."""
-        from igasgd.models import _time_embedding
+        from driftflow.models import time_embedding
 
-        emb1 = _time_embedding(0.1, dim=8)
-        emb2 = _time_embedding(0.9, dim=8)
+        emb1 = time_embedding(0.1, dim=8)
+        emb2 = time_embedding(0.9, dim=8)
         assert emb1 != emb2
 
     def test_time_embedding_zero_dim(self) -> None:
         """Verify time embedding zero dim."""
-        from igasgd.models import _time_embedding
+        from driftflow.models import time_embedding
 
-        emb = _time_embedding(0.5, dim=0)
+        emb = time_embedding(0.5, dim=0)
         assert emb == []
 
 

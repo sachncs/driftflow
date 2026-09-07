@@ -31,8 +31,8 @@ can instantiate them with no arguments for paper-faithful reproduction.
 
 Interactions with other modules
 -------------------------------
-This module is consumed by :mod:`igasgd.sampler` to construct
-:class:`~igasgd.sampler.DVSSampler` instances.  It does not depend on any
+This module is consumed by :mod:`driftflow.sampler` to construct
+:class:`~driftflow.sampler.DVSSampler` instances.  It does not depend on any
 other module of the package.
 
 References:
@@ -154,7 +154,7 @@ class DatasetConfig:
         exactly equal to ``start`` or ``end`` is treated as inside the
         active range.  An empty ``active_range`` is interpreted as
         "always active", matching the convention used by ``in_active_range``
-        in :mod:`igasgd.utils`.
+        in :mod:`driftflow.utils`.
 
         Args:
             time: Current diffusion time ``t`` in ``[0, T]``.

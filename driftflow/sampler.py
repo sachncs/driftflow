@@ -22,6 +22,12 @@ This module is the heart of the package.  It implements:
 * :func:`heun_step` -- **Algorithm 3**, the Heun predictor-corrector
   update.
 
+* :data:`SOLVERS` / :func:`register_solver` -- a pluggable solver
+  registry that decouples the adaptive loop from the concrete
+  integrator.  New solvers implement the uniform :data:`SolverStep`
+  signature and are registered by name, so the loop never needs to
+  change when a solver is added.
+
 * :class:`DVSSampler` -- **Algorithm 1** (the meta-algorithm) tying the
   above building blocks into a complete adaptive sampling loop.
 
@@ -63,11 +69,11 @@ Assumptions
 
 Interactions with other modules
 -------------------------------
-* Reads :class:`~igasgd.config.CommonConfig` and
-  :class:`~igasgd.config.DatasetConfig` for hyperparameter lookup.
-* Uses :func:`~igasgd.utils.clip_value` to enforce the
+* Reads :class:`~driftflow.config.CommonConfig` and
+  :class:`~driftflow.config.DatasetConfig` for hyperparameter lookup.
+* Uses :func:`~driftflow.utils.clip_value` to enforce the
   ``[dt_min, dt_max]`` interval and to clamp per-element bounds.
-* Consumes a callable :class:`~igasgd.schedule.NoiseSchedule` for the
+* Consumes a callable :class:`~driftflow.schedule.NoiseSchedule` for the
   diffusion noise scale ``g_t``.
 """
 
@@ -99,8 +105,29 @@ shape ``(N, N)``).
 NoiseSchedule = Callable[[float], float]
 """Callable signature ``t -> g_t`` returning the diffusion noise scale."""
 
+SolverStep = Callable[
+    [
+        list[list[float]],
+        list[list[float]],
+        list[list[float]],
+        list[list[float]],
+        float,
+        float,
+        random.Random,
+        DriftFunction,
+        float,
+    ],
+    tuple[list[list[float]], list[list[float]]],
+]
+"""Uniform signature of a solver step: ``(X, A, f_X, f_A, dt, noise, rng, drift, t)``.
 
-def _squared_l2_difference(current: list[list[float]], previous: list[list[float]]) -> float:
+The last two arguments (the drift function and the current time) are the
+extension point that lets higher-order solvers such as Heun evaluate a
+second drift inside the step; first-order solvers simply ignore them.
+"""
+
+
+def squared_l2_difference(current: list[list[float]], previous: list[list[float]]) -> float:
     """Compute the squared element-wise L2 norm between two matrices.
 
     This is the inner-loop primitive underlying
@@ -169,7 +196,7 @@ def compute_drift_variation_score(
         for the two modalities.
 
     Raises:
-        ValueError: Propagated from :func:`_squared_l2_difference` if
+        ValueError: Propagated from :func:`squared_l2_difference` if
             the drift matrices have mismatched shapes.
 
     Complexity:
@@ -177,8 +204,8 @@ def compute_drift_variation_score(
         node features.
     """
     denominator = noise_scale * noise_scale + eps_num
-    v_x = _squared_l2_difference(current_drift_x, previous_drift_x) / denominator
-    v_a = _squared_l2_difference(current_drift_a, previous_drift_a) / denominator
+    v_x = squared_l2_difference(current_drift_x, previous_drift_x) / denominator
+    v_a = squared_l2_difference(current_drift_a, previous_drift_a) / denominator
     return v_x, v_a
 
 
@@ -269,7 +296,7 @@ def compute_timestep(
         * ``smoothed_score = inf`` makes the ratio ``0``, so ``dt``
           clips to ``dt_min``.
         * ``smoothed_score`` is NaN propagates NaN, which is then
-          returned by :func:`~igasgd.utils.clip_value`.
+          returned by :func:`~driftflow.utils.clip_value`.
 
     Complexity:
         O(1).
@@ -317,7 +344,7 @@ def global_refresh(
     return combined, combined
 
 
-def _add_drift_and_noise(
+def add_drift_and_noise(
     state: list[list[float]],
     drift: list[list[float]],
     timestep: float,
@@ -396,8 +423,8 @@ def euler_step(
     Complexity:
         O(N^2 + N * D) per call.
     """
-    next_features = _add_drift_and_noise(features, drift_features, timestep, noise_scale, rng)
-    next_adjacency = _add_drift_and_noise(adjacency, drift_adjacency, timestep, noise_scale, rng)
+    next_features = add_drift_and_noise(features, drift_features, timestep, noise_scale, rng)
+    next_adjacency = add_drift_and_noise(adjacency, drift_adjacency, timestep, noise_scale, rng)
     return next_features, next_adjacency
 
 
@@ -458,10 +485,10 @@ def heun_step(
         to the Euler-Maruyama update; the unit tests verify this.
     """
     # Predictor: standard Euler-Maruyama step using the first-stage drift.
-    predicted_features = _add_drift_and_noise(
+    predicted_features = add_drift_and_noise(
         features, first_drift_features, timestep, noise_scale, rng
     )
-    predicted_adjacency = _add_drift_and_noise(
+    predicted_adjacency = add_drift_and_noise(
         adjacency, first_drift_adjacency, timestep, noise_scale, rng
     )
 
@@ -471,7 +498,7 @@ def heun_step(
     )
 
     # Corrector: trapezoidal average of first and second drifts.
-    def _average_and_update(
+    def average_and_update(
         state: list[list[float]],
         drift1: list[list[float]],
         drift2: list[list[float]],
@@ -489,9 +516,107 @@ def heun_step(
             result.append(new_row)
         return result
 
-    next_features = _average_and_update(features, first_drift_features, second_drift_features)
-    next_adjacency = _average_and_update(adjacency, first_drift_adjacency, second_drift_adjacency)
+    next_features = average_and_update(features, first_drift_features, second_drift_features)
+    next_adjacency = average_and_update(adjacency, first_drift_adjacency, second_drift_adjacency)
     return next_features, next_adjacency
+
+
+# ---------------------------------------------------------------------------
+# Solver registry
+# ---------------------------------------------------------------------------
+# The registry decouples the sampler loop from the concrete solver, so that
+# new integrators (DPM-Solver, midpoint, adaptive RK45, ...) can be plugged
+# in without editing ``DVSSampler``.  The loop only knows about the uniform
+# :data:`SolverStep` signature; solvers that need an extra drift evaluation
+# (e.g. Heun) receive ``drift_function`` and ``time`` through that signature.
+SOLVERS: dict[str, SolverStep] = {}
+"""Registry mapping solver names to step functions.
+
+Populated at import time with ``"Euler"`` and ``"Heun"``.  Extend with
+:func:`register_solver`; the keys are the ``solver=`` values accepted by
+:class:`DVSSampler`.
+"""
+
+
+def euler_dispatch(
+    features: list[list[float]],
+    adjacency: list[list[float]],
+    drift_features: list[list[float]],
+    drift_adjacency: list[list[float]],
+    timestep: float,
+    noise_scale: float,
+    rng: random.Random,
+    drift_function: DriftFunction,
+    time: float,
+) -> tuple[list[list[float]], list[list[float]]]:
+    """Uniform-signature adapter for :func:`euler_step`.
+
+    First-order solvers need neither ``drift_function`` nor ``time``;
+    both are ignored to satisfy the :data:`SolverStep` contract.
+    """
+    del drift_function, time  # not needed by first-order solvers
+    return euler_step(
+        features, adjacency, drift_features, drift_adjacency, timestep, noise_scale, rng
+    )
+
+
+def heun_dispatch(
+    features: list[list[float]],
+    adjacency: list[list[float]],
+    drift_features: list[list[float]],
+    drift_adjacency: list[list[float]],
+    timestep: float,
+    noise_scale: float,
+    rng: random.Random,
+    drift_function: DriftFunction,
+    time: float,
+) -> tuple[list[list[float]], list[list[float]]]:
+    """Uniform-signature adapter for :func:`heun_step`.
+
+    The Heun predictor-corrector needs a second drift evaluation at
+    ``time + timestep``, which it obtains from ``drift_function``.
+    """
+    return heun_step(
+        features,
+        adjacency,
+        drift_features,
+        drift_adjacency,
+        timestep,
+        noise_scale,
+        drift_function,
+        time,
+        rng,
+    )
+
+
+SOLVERS["Euler"] = euler_dispatch
+SOLVERS["Heun"] = heun_dispatch
+
+
+def register_solver(name: str, step_function: SolverStep) -> None:
+    """Register a custom solver step under ``name``.
+
+    The registration makes ``name`` available as a ``solver=`` value for
+    :class:`DVSSampler`.  This is the primary extension point for adding
+    new integrators without modifying the sampler loop.
+
+    Args:
+        name: Solver name used as the ``solver=`` argument.  Overwriting
+            an existing name replaces the previous implementation.
+        step_function: Callable with the uniform :data:`SolverStep`
+            signature ``(X, A, f_X, f_A, dt, noise, rng, drift, t)``
+            returning the updated ``(X, A)`` pair.
+
+    Note:
+        A custom solver still needs a matching ``gamma`` in the
+        :class:`~driftflow.config.DatasetConfig` (``gamma_euler`` or
+        ``gamma_heun``) because :class:`DVSSampler` resolves the
+        aggregation factor from the dataset configuration.  Map the
+        custom name to the appropriate ``gamma`` field at construction
+        time by choosing which field the sampler reads (see
+        :meth:`DVSSampler.resolve_gamma`).
+    """
+    SOLVERS[name] = step_function
 
 
 class DVSSampler:
@@ -520,18 +645,20 @@ class DVSSampler:
         2. **Sampling** -- call :meth:`sample` one or more times.  Each
            call consumes the internal RNG and produces a fresh
            trajectory.
-        3. **Inspection** -- access the read-only :attr:`gamma` and the
-           original ``common_config`` / ``dataset_config`` / ``solver``
-           attributes for diagnostic purposes.
+        3. **Inspection** -- access :attr:`gamma` and the original
+           ``drift_function`` / ``noise_schedule`` / ``common_config`` /
+           ``dataset_config`` / ``solver`` / ``rng`` attributes for
+           diagnostic purposes.
 
     Important attributes:
-        * :attr:`gamma` -- the solver-specific aggregation factor.
-        * The private ``_drift_function``, ``_noise_schedule``,
-          ``_common_config``, ``_dataset_config``, ``_solver``, and
-          ``_rng`` slots back the public behaviour.
+        * :attr:`gamma` -- the solver-specific aggregation factor,
+          resolved from the dataset configuration at construction time.
+        * ``drift_function``, ``noise_schedule``, ``common_config``,
+          ``dataset_config``, ``solver``, and ``rng`` -- the constructor
+          arguments retained on the instance for inspection and reuse.
 
     Example:
-        >>> from igasgd import (
+        >>> from driftflow import (
         ...     CommonConfig, DVSSampler, LinearSchedule,
         ...     get_dataset_config, make_drift_function,
         ...     GruMApproximation,
@@ -576,51 +703,107 @@ class DVSSampler:
                 diffusion noise scale.
             common_config: Common hyperparameters (Table 6).
             dataset_config: Dataset-specific hyperparameters (Table 7).
-            solver: One of ``"Euler"`` or ``"Heun"``.
+            solver: One of ``"Euler"`` or ``"Heun"`` (or any solver
+                registered via :func:`register_solver`).
             seed: Optional random seed for reproducibility.  When
                 ``None`` the RNG is initialised from a non-deterministic
                 source.
 
         Raises:
-            ValueError: If ``solver`` is not ``"Euler"`` or ``"Heun"``.
+            ValueError: If ``solver`` is not registered in
+                :data:`SOLVERS`.
             ValueError: If ``dataset_config`` does not provide a
                 ``gamma`` for the requested solver.
         """
-        if solver not in {"Euler", "Heun"}:
-            raise ValueError(f"solver must be 'Euler' or 'Heun', got {solver!r}")
-        self._drift_function = drift_function
-        self._noise_schedule = noise_schedule
-        self._common_config = common_config
-        self._dataset_config = dataset_config
-        self._solver = solver
-        self._rng = random.Random(seed)
+        if solver not in SOLVERS:
+            raise ValueError(f"solver must be one of {sorted(SOLVERS)}, got {solver!r}")
+        self.drift_function = drift_function
+        self.noise_schedule = noise_schedule
+        self.common_config = common_config
+        self.dataset_config = dataset_config
+        self.solver = solver
+        self.rng = random.Random(seed)
 
-        # Select the solver-specific aggregation factor from Table 7.
-        # The chosen gamma is what couples the two modalities via
-        # ``global_refresh`` after every adapted step.
-        if solver == "Euler":
-            self._gamma = dataset_config.gamma_euler
-        else:
-            self._gamma = dataset_config.gamma_heun
-
-        if self._gamma is None:
+        gamma = self.resolve_gamma(dataset_config, solver)
+        if gamma is None:
             raise ValueError(
                 f"DatasetConfig {dataset_config.model}/{dataset_config.dataset} "
                 f"has no gamma for solver={solver}"
             )
+        self.gamma = gamma
 
-    @property
-    def gamma(self) -> float:
-        """Aggregation factor used by this sampler instance.
+    @staticmethod
+    def resolve_gamma(dataset_config: DatasetConfig, solver: str) -> float | None:
+        """Resolve the solver-specific aggregation factor ``gamma``.
 
-        Resolved from ``dataset_config`` at construction time.  The
-        cast is safe because :meth:`__init__` already validated that
-        ``self._gamma`` is not ``None``.
+        Known first-order and second-order solvers read ``gamma_euler``
+        and ``gamma_heun`` respectively.  Registering an entirely new
+        solver in :data:`SOLVERS` maps back to one of these two fields
+        (the heuristic: any solver reporting a second-order error
+        profile maps to ``gamma_heun``); subclasses may override this
+        method for a fully custom mapping.
+
+        Args:
+            dataset_config: The dataset configuration containing the
+                gamma fields.
+            solver: The resolved solver name.
 
         Returns:
-            The solver-specific ``gamma`` value.
+            The aggregation factor, or ``None`` if the model/dataset
+            does not support this solver.
         """
-        return self._gamma  # type: ignore[return-value]
+        if solver == "Euler":
+            return dataset_config.gamma_euler
+        return dataset_config.gamma_heun
+
+    @staticmethod
+    def validate_sample_inputs(
+        initial_features: list[list[float]],
+        initial_adjacency: list[list[float]],
+        terminal_time: float,
+    ) -> None:
+        """Validate the arguments passed to :meth:`sample`.
+
+        Fail fast with descriptive errors instead of allowing silent
+        shape drift or infinite loops deep inside the sampling loop.
+        This is the package's primary input-validation chokepoint and
+        gives clear failure messages for the most common caller
+        mistakes.
+
+        Args:
+            initial_features: Node feature matrix; must be a non-empty
+                rectangular ``list[list[float]]``.
+            initial_adjacency: Adjacency matrix; must be a non-empty
+                rectangular ``list[list[float]]``.
+            terminal_time: Diffusion horizon ``T``; must be finite and
+                non-negative, and ``T - eps_bound`` must not be
+                negative in a way that prevents termination.
+
+        Raises:
+            ValueError: If any of the matrices is empty or ragged, or
+                if ``terminal_time`` is negative, NaN, or non-finite.
+        """
+        matrices = (
+            ("initial_features", initial_features),
+            ("initial_adjacency", initial_adjacency),
+        )
+        for name, matrix in matrices:
+            if len(matrix) == 0:
+                raise ValueError(f"{name} must be a non-empty matrix, got {matrix!r}")
+            width = len(matrix[0])
+            if width == 0:
+                raise ValueError(f"{name} rows must be non-empty, got {matrix!r}")
+            for row_index, row in enumerate(matrix):
+                if len(row) != width:
+                    raise ValueError(
+                        f"{name} is ragged: expected width {width}, "
+                        f"but row {row_index} has width {len(row)}"
+                    )
+
+        if not math.isfinite(terminal_time) or terminal_time < 0.0:
+            raise ValueError(
+                f"terminal_time must be a finite non-negative number, got {terminal_time!r}"
+            )
 
     def sample(
         self,
@@ -670,8 +853,10 @@ class DVSSampler:
             zero) the sampler returns the initial state unchanged and
             records ``total_steps = 0``.
         """
-        common = self._common_config
-        dataset = self._dataset_config
+        common = self.common_config
+        dataset = self.dataset_config
+
+        self.validate_sample_inputs(initial_features, initial_adjacency, terminal_time)
 
         time = 0.0
         step_index = 1
@@ -702,10 +887,10 @@ class DVSSampler:
 
         while time < terminal_time - common.eps_bound:
             # --- Drift evaluation at the current state ---
-            drift_features, drift_adjacency = self._drift_function(
+            drift_features, drift_adjacency = self.drift_function(
                 prev_features, prev_adjacency, time
             )
-            noise_scale_g = self._noise_schedule(time)
+            noise_scale_g = self.noise_schedule(time)
 
             # DVS is active only if:
             #   (a) the dataset permits it at this time, AND
@@ -756,10 +941,8 @@ class DVSSampler:
                 # Bottleneck principle: keep X and A synchronised by
                 # taking the more conservative (smaller) timestep.
                 timestep = min(dt_features, dt_adjacency)
-                # Mypy narrowing: gamma was validated in __init__.
-                assert self._gamma is not None
                 # Global variation refresh: synchronise the EMA states.
-                smoothed_x, smoothed_a = global_refresh(smoothed_x, smoothed_a, self._gamma)
+                smoothed_x, smoothed_a = global_refresh(smoothed_x, smoothed_a, self.gamma)
 
                 if verbose:
                     print(
@@ -784,28 +967,18 @@ class DVSSampler:
             # ``g_t`` by ``sqrt(dt)`` here lets the step helpers reuse
             # the same scaling for both modalities.
             noise_scale = noise_scale_g * math.sqrt(timestep)
-            if self._solver == "Euler":
-                next_features, next_adjacency = euler_step(
-                    prev_features,
-                    prev_adjacency,
-                    drift_features,
-                    drift_adjacency,
-                    timestep,
-                    noise_scale,
-                    self._rng,
-                )
-            else:  # Heun
-                next_features, next_adjacency = heun_step(
-                    prev_features,
-                    prev_adjacency,
-                    drift_features,
-                    drift_adjacency,
-                    timestep,
-                    noise_scale,
-                    self._drift_function,
-                    time,
-                    self._rng,
-                )
+            step_function = SOLVERS[self.solver]
+            next_features, next_adjacency = step_function(
+                prev_features,
+                prev_adjacency,
+                drift_features,
+                drift_adjacency,
+                timestep,
+                noise_scale,
+                self.rng,
+                self.drift_function,
+                time,
+            )
 
             # Record per-step history for post-hoc analysis.
             info["steps"].append(float(step_index))

@@ -6,7 +6,7 @@ The real networks are deep learning models (likely PyTorch / PyTorch
 Geometric) with graph attention, message passing, and time embedding
 layers.  Because we cannot ship a faithful reproduction, this module
 provides a stand-in that satisfies the ``drift_function(X, A, t)``
-interface contract used by :class:`~igasgd.sampler.DVSSampler`.
+interface contract used by :class:`~driftflow.sampler.DVSSampler`.
 
 What we provide
 ---------------
@@ -20,7 +20,7 @@ What we provide
   smaller hidden width (24), intended as a stand-in for GDSS.
 * :func:`make_drift_function` -- convenience wrapper that adapts any
   :class:`SimpleGraphDenoiser` instance to the call signature expected
-  by :class:`~igasgd.sampler.DVSSampler`.
+  by :class:`~driftflow.sampler.DVSSampler`.
 
 What is **missing** (and explicitly marked as gaps)
 ---------------------------------------------------
@@ -63,7 +63,7 @@ import random
 from collections.abc import Callable
 
 
-def _xavier_uniform(rows: int, cols: int, rng: random.Random) -> list[list[float]]:
+def xavier_uniform(rows: int, cols: int, rng: random.Random) -> list[list[float]]:
     """Generate a ``rows x cols`` matrix with Xavier uniform initialisation.
 
     Xavier (Glorot) uniform initialisation scales weights by
@@ -84,7 +84,7 @@ def _xavier_uniform(rows: int, cols: int, rng: random.Random) -> list[list[float
     return [[rng.uniform(-limit, limit) for _ in range(cols)] for _ in range(rows)]
 
 
-def _matvec(matrix: list[list[float]], vector: list[float]) -> list[float]:
+def matvec(matrix: list[list[float]], vector: list[float]) -> list[float]:
     """Multiply a matrix by a column vector.
 
     Args:
@@ -104,7 +104,7 @@ def _matvec(matrix: list[list[float]], vector: list[float]) -> list[float]:
     return [sum(w * v for w, v in zip(row, vector, strict=False)) for row in matrix]
 
 
-def _matmul(a: list[list[float]], b: list[list[float]]) -> list[list[float]]:
+def matmul(a: list[list[float]], b: list[list[float]]) -> list[list[float]]:
     """Multiply two matrices using pure-Python loops.
 
     Used only by :class:`SimpleGraphDenoiser` for small matrices; for
@@ -130,7 +130,7 @@ def _matmul(a: list[list[float]], b: list[list[float]]) -> list[list[float]]:
     return result
 
 
-def _relu(values: list[float]) -> list[float]:
+def relu(values: list[float]) -> list[float]:
     """Apply the element-wise ReLU activation.
 
     Args:
@@ -143,7 +143,7 @@ def _relu(values: list[float]) -> list[float]:
     return [max(0.0, v) for v in values]
 
 
-def _time_embedding(time: float, dim: int) -> list[float]:
+def time_embedding(time: float, dim: int) -> list[float]:
     """Compute a sinusoidal time embedding (Fourier features).
 
     This is a standard diffusion-model convention originating from the
@@ -240,25 +240,25 @@ class SimpleGraphDenoiser:
             hidden_dim: Width of the two hidden layers in the MLP.
             seed: Random seed for reproducible weight initialisation.
         """
-        self._num_nodes = num_nodes
-        self._feature_dim = feature_dim
-        self._hidden_dim = hidden_dim
-        self._rng = random.Random(seed)
+        self.num_nodes = num_nodes
+        self.feature_dim = feature_dim
+        self.hidden_dim = hidden_dim
+        self.rng = random.Random(seed)
 
         # Per-node input = own features + adjacency row + time embedding.
         time_dim = 8
         input_dim = feature_dim + num_nodes + time_dim
         output_dim = feature_dim + num_nodes  # drift for X and A concatenated
 
-        self._weight1 = _xavier_uniform(input_dim, hidden_dim, self._rng)
-        self._bias1 = [self._rng.gauss(0.0, 0.01) for _ in range(hidden_dim)]
-        self._weight2 = _xavier_uniform(hidden_dim, hidden_dim, self._rng)
-        self._bias2 = [self._rng.gauss(0.0, 0.01) for _ in range(hidden_dim)]
-        self._weight3 = _xavier_uniform(hidden_dim, output_dim, self._rng)
-        self._bias3 = [self._rng.gauss(0.0, 0.01) for _ in range(output_dim)]
-        self._time_dim = time_dim
+        self.weight1 = xavier_uniform(input_dim, hidden_dim, self.rng)
+        self.bias1 = [self.rng.gauss(0.0, 0.01) for _ in range(hidden_dim)]
+        self.weight2 = xavier_uniform(hidden_dim, hidden_dim, self.rng)
+        self.bias2 = [self.rng.gauss(0.0, 0.01) for _ in range(hidden_dim)]
+        self.weight3 = xavier_uniform(hidden_dim, output_dim, self.rng)
+        self.bias3 = [self.rng.gauss(0.0, 0.01) for _ in range(output_dim)]
+        self.time_dim = time_dim
 
-    def _mlp(self, features: list[float]) -> list[float]:
+    def mlp(self, features: list[float]) -> list[float]:
         """Forward pass through the 3-layer MLP with ReLU activations.
 
         Applies the affine transformation ``W_i x + b_i`` at each
@@ -272,14 +272,14 @@ class SimpleGraphDenoiser:
         Returns:
             Output vector of length ``output_dim``.
         """
-        h = _matvec(self._weight1, features)
-        h = [v + b for v, b in zip(h, self._bias1, strict=False)]
-        h = _relu(h)
-        h = _matvec(self._weight2, h)
-        h = [v + b for v, b in zip(h, self._bias2, strict=False)]
-        h = _relu(h)
-        out = _matvec(self._weight3, h)
-        out = [v + b for v, b in zip(out, self._bias3, strict=False)]
+        h = matvec(self.weight1, features)
+        h = [v + b for v, b in zip(h, self.bias1, strict=False)]
+        h = relu(h)
+        h = matvec(self.weight2, h)
+        h = [v + b for v, b in zip(h, self.bias2, strict=False)]
+        h = relu(h)
+        out = matvec(self.weight3, h)
+        out = [v + b for v, b in zip(out, self.bias3, strict=False)]
         return out
 
     def __call__(
@@ -308,19 +308,19 @@ class SimpleGraphDenoiser:
         Complexity:
             O(N * input_dim * hidden_dim) for the per-node MLPs.
         """
-        time_emb = _time_embedding(time, self._time_dim)
+        time_emb = time_embedding(time, self.time_dim)
         drift_features: list[list[float]] = []
         drift_adjacency_rows: list[list[float]] = []
 
-        for node_idx in range(self._num_nodes):
+        for node_idx in range(self.num_nodes):
             node_feat = features[node_idx]
             adj_row = adjacency[node_idx]
             inp = node_feat + adj_row + time_emb
-            out = self._mlp(inp)
+            out = self.mlp(inp)
 
             # Split the MLP output into feature drift and adjacency drift.
-            feat_drift = out[: self._feature_dim]
-            adj_drift = out[self._feature_dim :]
+            feat_drift = out[: self.feature_dim]
+            adj_drift = out[self.feature_dim :]
             drift_features.append(feat_drift)
             drift_adjacency_rows.append(adj_drift)
 
@@ -340,7 +340,7 @@ class GruMApproximation(SimpleGraphDenoiser):
 
     Example:
         >>> approx = GruMApproximation(num_nodes=5, feature_dim=3, seed=42)
-        >>> approx._hidden_dim
+        >>> approx.hidden_dim
         32
     """
 
@@ -372,7 +372,7 @@ class GDSSApproximation(SimpleGraphDenoiser):
 
     Example:
         >>> approx = GDSSApproximation(num_nodes=5, feature_dim=3, seed=42)
-        >>> approx._hidden_dim
+        >>> approx.hidden_dim
         24
     """
 
@@ -396,7 +396,7 @@ def make_drift_function(model: SimpleGraphDenoiser) -> Callable:
     """Wrap a :class:`SimpleGraphDenoiser` into the standard drift interface.
 
     The wrapper closes over ``model`` so the returned callable can be
-    passed directly to :class:`~igasgd.sampler.DVSSampler`.  It exists
+    passed directly to :class:`~driftflow.sampler.DVSSampler`.  It exists
     mainly as a documentation aid: it makes explicit that the
     underlying object is a model and the wrapping callable is the
     drift function.
@@ -407,23 +407,23 @@ def make_drift_function(model: SimpleGraphDenoiser) -> Callable:
 
     Returns:
         A callable ``(X, A, t) -> (f_X, f_A)`` compatible with
-        :class:`~igasgd.sampler.DVSSampler`.  The wrapper simply
+        :class:`~driftflow.sampler.DVSSampler`.  The wrapper simply
         delegates to ``model.__call__``; it performs no additional
         computation or state management.
 
     Example:
-        >>> from igasgd import GruMApproximation, make_drift_function
+        >>> from driftflow import GruMApproximation, make_drift_function
         >>> approx = GruMApproximation(num_nodes=3, feature_dim=2, seed=0)
         >>> drift = make_drift_function(approx)
         >>> drift([[0.0, 0.0]] * 3, [[0.0] * 3 for _ in range(3)], 0.0)[0]
         [[...], [...], [...]]
     """
 
-    def _drift(
+    def drift(
         features: list[list[float]],
         adjacency: list[list[float]],
         time: float,
     ) -> tuple[list[list[float]], list[list[float]]]:
         return model(features, adjacency, time)
 
-    return _drift
+    return drift
