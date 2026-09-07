@@ -4,9 +4,9 @@ import math
 import sys
 
 # Ensure the source tree is on the path when running directly.
-sys.path.insert(0, __import__("os").path.join(__import__("os").path.dirname(__file__), "..", "src"))
+sys.path.insert(0, __import__("os").path.join(__import__("os").path.dirname(__file__), ".."))
 
-from igasgd import CosineSchedule, LinearSchedule, PolynomialSchedule, constant_schedule
+from driftflow import CosineSchedule, LinearSchedule, PolynomialSchedule, constant_schedule
 
 
 class TestLinearSchedule:

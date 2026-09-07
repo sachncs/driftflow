@@ -6,10 +6,12 @@ include CODE_OF_CONDUCT.md
 include SECURITY.md
 include LICENSE
 
-recursive-include src/igasgd py.typed
+recursive-include driftflow py.typed
 recursive-include docs *.md
 recursive-include examples *.py
 recursive-include tests *.py
+recursive-include scripts *.sh
+recursive-include .github *.yml *.md
 
 # Exclude build artifacts and temporary files
 global-exclude __pycache__

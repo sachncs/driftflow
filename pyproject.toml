@@ -1,20 +1,20 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
+requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "igasgd"
-version = "0.1.0"
-description = "Information-Geometric Adaptive Sampling for Graph Diffusion"
+name = "driftflow"
+dynamic = ["version"]
+description = "Drift Variation Score (DVS) adaptive SDE sampler for graph diffusion"
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.10"
 authors = [
     {name = "Sachin", email = "sachncs@gmail.com"}
 ]
-keywords = ["graph diffusion", "adaptive sampling", "DVS", "SDE", "stochastic differential equations", "generative models"]
+keywords = ["graph diffusion", "adaptive sampling", "DVS", "SDE", "stochastic differential equations", "generative models", "driftflow"]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
@@ -31,6 +31,7 @@ dependencies = []
 
 [project.optional-dependencies]
 dev = [
+    "build>=1.0",
     "pytest>=7.0",
     "pytest-cov",
     "mypy",
@@ -45,10 +46,13 @@ Changelog = "https://github.com/sachncs/information-geometric-adaptive-sampling/
 Issues = "https://github.com/sachncs/information-geometric-adaptive-sampling/issues"
 
 [tool.setuptools.packages.find]
-where = ["src"]
+include = ["driftflow*"]
 
-[tool.setuptools.package-dir]
-"" = "src"
+[tool.setuptools.dynamic]
+version = {attr = "driftflow.__version__"}
+
+[tool.setuptools.package-data]
+driftflow = ["py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

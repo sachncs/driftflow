@@ -3,9 +3,9 @@
 import sys
 
 # Ensure the source tree is on the path when running directly.
-sys.path.insert(0, __import__("os").path.join(__import__("os").path.dirname(__file__), "..", "src"))
+sys.path.insert(0, __import__("os").path.join(__import__("os").path.dirname(__file__), ".."))
 
-from igasgd import clip_value, decode_adjacency, in_active_range, sigmoid_decode_adjacency
+from driftflow import clip_value, decode_adjacency, in_active_range, sigmoid_decode_adjacency
 
 
 class TestClipValue:

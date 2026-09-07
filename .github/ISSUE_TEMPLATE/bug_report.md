@@ -28,7 +28,7 @@ What actually happened. Include any error messages or tracebacks.
 
 ```python
 # Provide the smallest possible code example that reproduces the issue
-from igasgd import ...
+from driftflow import ...
 
 # Your code here
 ```
@@ -37,7 +37,7 @@ from igasgd import ...
 
 - OS: [e.g., Ubuntu 22.04, macOS 14]
 - Python version: [e.g., 3.12.1]
-- Package version: [e.g., 0.1.0]
+- Package version: [e.g., 1.0.0]
 - Installation method: [e.g., pip install -e .]
 
 ## Additional Context

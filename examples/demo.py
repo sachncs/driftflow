@@ -6,10 +6,10 @@ This script provides two ways to drive the sampler:
   ``f(X, A, t) = -0.5 * X`` style drift.  Useful for smoke-testing the
   sampler pipeline without any neural network.
 * **Simplified denoiser approximation** (``--use-approximation``) --
-  wraps :class:`~igasgd.models.GruMApproximation` or
-  :class:`~igasgd.models.GDSSApproximation` as the drift function.
+  wraps :class:`~driftflow.models.GruMApproximation` or
+  :class:`~driftflow.models.GDSSApproximation` as the drift function.
   These are *not* the real GruM/GDSS networks (see the module docstring
-  of :mod:`igasgd.models` for details) but they satisfy the same
+  of :mod:`driftflow.models` for details) but they satisfy the same
   interface and let us demonstrate the sampler end-to-end.
 
 Usage examples::
@@ -31,10 +31,10 @@ import sys
 from pathlib import Path
 
 # Ensure the source tree is on the path when running directly.
-_SRC = Path(__file__).resolve().parent.parent / "src"
-sys.path.insert(0, str(_SRC))
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
 
-from igasgd import (
+from driftflow import (
     DATASET_CONFIGS,
     CommonConfig,
     DVSSampler,
@@ -105,7 +105,7 @@ def run_demo(
     """Run a sampling demo and print statistics.
 
     Selects the drift function (synthetic or model approximation),
-    constructs a :class:`~igasgd.sampler.DVSSampler`, runs it on a
+    constructs a :class:`~driftflow.sampler.DVSSampler`, runs it on a
     random 5-node / 3-feature graph, and prints summary statistics
     including the number of steps, the mean / min / max / stddev of
     the adapted timestep, and the number of decoded edges.

@@ -1,4 +1,4 @@
-# Contributing to igasgd
+# Contributing to driftflow
 
 Thank you for your interest in contributing! This document provides guidelines and instructions for contributing to this project.
 
@@ -23,12 +23,12 @@ This project follows the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.
 1. Fork the repository on GitHub
 2. Clone your fork locally:
    ```bash
-   git clone https://github.com/YOUR_USERNAME/igasgd.git
-   cd igasgd
+   git clone https://github.com/YOUR_USERNAME/driftflow.git
+   cd driftflow
    ```
 3. Add the upstream remote:
    ```bash
-   git remote add upstream https://github.com/example/igasgd.git
+   git remote add upstream https://github.com/example/driftflow.git
    ```
 4. Create a branch for your changes:
    ```bash
@@ -42,7 +42,7 @@ This project follows the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.
 pip install -e ".[dev]"
 
 # Verify installation
-python -c "import igasgd; print(igasgd.__version__)"
+python -c "import driftflow; print(driftflow.__version__)"
 ```
 
 ## Branch Naming
@@ -127,16 +127,16 @@ This project follows the [Google Python Style Guide](https://google.github.io/st
 
 ```bash
 # Check for linting errors
-ruff check src/ tests/
+ruff check driftflow/ tests/ examples/
 
 # Auto-fix linting issues
-ruff check --fix src/ tests/
+ruff check --fix driftflow/ tests/ examples/
 
 # Format code
-ruff format src/ tests/
+ruff format driftflow/ tests/ examples/
 
 # Type check
-mypy src/igasgd
+mypy driftflow
 ```
 
 ### Pre-commit Checks
@@ -145,7 +145,7 @@ Before submitting a PR, ensure all of the following pass:
 
 ```bash
 # All checks in one command
-ruff check src/ tests/ && ruff format --check src/ tests/ && mypy src/igasgd && python -m pytest tests/
+ruff check driftflow/ tests/ examples/ && ruff format --check driftflow/ tests/ examples/ && mypy driftflow && python -m pytest tests/
 ```
 
 ## Running Tests
@@ -158,7 +158,7 @@ python -m pytest tests/
 python -m pytest tests/ -v
 
 # Run with coverage report
-python -m pytest tests/ --cov=igasgd --cov-report=term-missing
+python -m pytest tests/ --cov=driftflow --cov-report=term-missing
 
 # Run a specific test file
 python -m pytest tests/test_sampler.py

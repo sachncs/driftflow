@@ -3,9 +3,9 @@
 import sys
 
 # Ensure the source tree is on the path when running directly.
-sys.path.insert(0, __import__("os").path.join(__import__("os").path.dirname(__file__), "..", "src"))
+sys.path.insert(0, __import__("os").path.join(__import__("os").path.dirname(__file__), ".."))
 
-from igasgd import DATASET_CONFIGS, CommonConfig, DatasetConfig, get_dataset_config
+from driftflow import DATASET_CONFIGS, CommonConfig, DatasetConfig, get_dataset_config
 
 
 class TestCommonConfig:
