@@ -377,6 +377,36 @@ class TestEulerStep:
         assert abs(x1[0][0] - x2[0][0]) > 1e-6
 
 
+class TestEulerStepShapeMismatch:
+    """Tests that shape mismatches between state and drift raise."""
+
+    def test_row_count_mismatch_raises(self) -> None:
+        """Verify mismatched row count raises."""
+        from driftflow.sampler import add_drift_and_noise
+
+        with pytest.raises(ValueError, match="row"):
+            add_drift_and_noise(
+                state=[[1.0, 2.0], [3.0, 4.0]],
+                drift=[[0.0]],
+                timestep=0.1,
+                noise_scale=0.0,
+                rng=random.Random(0),
+            )
+
+    def test_row_width_mismatch_raises(self) -> None:
+        """Verify mismatched row width raises."""
+        from driftflow.sampler import add_drift_and_noise
+
+        with pytest.raises(ValueError, match="width"):
+            add_drift_and_noise(
+                state=[[1.0, 2.0]],
+                drift=[[3.0]],
+                timestep=0.1,
+                noise_scale=0.0,
+                rng=random.Random(0),
+            )
+
+
 class TestHeunStep:
     """Tests for Algorithm 3: Heun predictor-corrector update."""
 

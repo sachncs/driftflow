@@ -374,13 +374,27 @@ def add_drift_and_noise(
         A new matrix (same shape as ``state``) holding the updated
         values.  The inputs are not modified.
 
+    Raises:
+        ValueError: If ``state`` and ``drift`` have different row
+            counts, or if any pair of corresponding rows have different
+            column counts.
+
     Complexity:
         O(rows * cols) time, O(rows * cols) memory for the output.
     """
+    if len(state) != len(drift):
+        raise ValueError(
+            f"add_drift_and_noise: state has {len(state)} rows but drift has {len(drift)}"
+        )
     result: list[list[float]] = []
-    for state_row, drift_row in zip(state, drift, strict=False):
+    for state_row, drift_row in zip(state, drift, strict=True):
+        if len(state_row) != len(drift_row):
+            raise ValueError(
+                f"add_drift_and_noise: row width mismatch "
+                f"({len(state_row)} vs {len(drift_row)})"
+            )
         new_row: list[float] = []
-        for state_val, drift_val in zip(state_row, drift_row, strict=False):
+        for state_val, drift_val in zip(state_row, drift_row, strict=True):
             noise = noise_scale * rng.gauss(0.0, 1.0)
             new_row.append(state_val + drift_val * timestep + noise)
         result.append(new_row)
