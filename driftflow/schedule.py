@@ -138,16 +138,22 @@ class CosineSchedule:
 
         Returns:
             The tangent-based noise scale ``g(t)``.  Always positive
-            for ``time >= 0`` and finite for ``time <= 1``.
+            for ``time >= 0`` and finite everywhere in ``[0, 1]``.
 
         Edge cases:
             * ``time = 0`` returns ``tan(offset / (1 + offset) * pi / 2)``
               which is strictly positive when ``offset > 0``.
-            * ``time = 1`` returns ``tan(pi / 2)`` which is
-              mathematically infinite -- callers may want to clamp
-              the diffusion horizon slightly below ``1`` for stability.
+            * ``time = 1`` would evaluate ``tan(pi / 2)`` which is
+              mathematically infinite; the argument is clamped to
+              ``pi / 2 - 1e-12`` so the schedule remains finite at
+              the diffusion horizon.
         """
-        return math.tan((time + self.offset) / (1.0 + self.offset) * math.pi / 2.0)
+        arg = (time + self.offset) / (1.0 + self.offset) * math.pi / 2.0
+        # tan diverges at pi/2; keep the argument strictly below the
+        # singularity so the schedule remains finite everywhere.
+        if arg >= math.pi / 2.0:
+            arg = math.pi / 2.0 - 1e-12
+        return math.tan(arg)
 
 
 class PolynomialSchedule:
