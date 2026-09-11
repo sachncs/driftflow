@@ -156,9 +156,22 @@ docker run your-app
 After deployment, verify the package works:
 
 ```python
-from driftflow import DVSSampler, CommonConfig, LinearSchedule
+from driftflow import (
+    DVSSampler,
+    CommonConfig,
+    DatasetConfig,
+    LinearSchedule,
+)
 
 config = CommonConfig()
+dataset_config = DatasetConfig(
+    model="Test",
+    dataset="Test",
+    kappa_ref=1.0,
+    gamma_euler=0.5,
+    gamma_heun=0.5,
+    active_range=[(0.0, 1.0)],
+)
 schedule = LinearSchedule(sigma_min=0.01, sigma_max=0.5)
 
 # Minimal test
@@ -169,6 +182,7 @@ sampler = DVSSampler(
     drift_function=dummy_drift,
     noise_schedule=schedule,
     common_config=config,
+    dataset_config=dataset_config,
     solver="Euler",
     seed=42,
 )
