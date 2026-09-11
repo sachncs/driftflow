@@ -1430,7 +1430,10 @@ class TestSolverRegistry:
 
             return update(features, drift_features), update(adjacency, drift_adjacency)
 
+        from driftflow.sampler import register_gamma_field
+
         register_solver("MidpointTest", midpoint_step)
+        register_gamma_field("MidpointTest", "gamma_heun")
         try:
             sampler = self.make_sampler("MidpointTest")
             x0 = [[1.0, 0.0], [0.0, 1.0]]
@@ -1440,11 +1443,39 @@ class TestSolverRegistry:
             assert len(x_t) == 2
         finally:
             SOLVERS.pop("MidpointTest", None)
+            from driftflow.sampler import SOLVER_GAMMA_FIELDS
+
+            SOLVER_GAMMA_FIELDS.pop("MidpointTest", None)
 
     def test_unregistered_solver_raises(self) -> None:
         """Verify unregistered solver raises."""
         with pytest.raises(ValueError, match="solver must be one of"):
             self.make_sampler("DefinitelyNotASolver")
+
+    def test_registered_gamma_field_used_by_resolver(self) -> None:
+        """Verify register_gamma_field routes a solver to the named field."""
+        from driftflow.sampler import SOLVER_GAMMA_FIELDS, register_gamma_field
+
+        register_gamma_field("FakeSolverForTest", "gamma_euler")
+        try:
+            assert SOLVER_GAMMA_FIELDS["FakeSolverForTest"] == "gamma_euler"
+        finally:
+            SOLVER_GAMMA_FIELDS.pop("FakeSolverForTest", None)
+
+    def test_resolve_gamma_falls_back_to_heun_for_unregistered(self) -> None:
+        """Verify the fallback to gamma_heun for unregistered solvers is explicit."""
+        dataset = DatasetConfig(
+            model="Test",
+            dataset="Test",
+            kappa_ref=1.0,
+            gamma_euler=0.11,
+            gamma_heun=0.22,
+            active_range=[(0.0, 1.0)],
+        )
+        assert DVSSampler.resolve_gamma(dataset, "Euler") == 0.11
+        assert DVSSampler.resolve_gamma(dataset, "Heun") == 0.22
+        # Unknown solver falls back to gamma_heun.
+        assert DVSSampler.resolve_gamma(dataset, "Midpoint") == 0.22
 
 
 if __name__ == "__main__":
