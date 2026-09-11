@@ -78,7 +78,7 @@ from driftflow import (
 common_config = CommonConfig()
 dataset_configs = {
     ("GruM", "QM9"): get_dataset_config("GruM", "QM9"),
-    ("GDSS", "ZINC250K"): get_dataset_config("GDSS", "ZINC250K"),
+    ("GruM", "ZINC250k"): get_dataset_config("GruM", "ZINC250k"),
 }
 
 def generate_graph(drift_function, model, dataset, seed=None):
