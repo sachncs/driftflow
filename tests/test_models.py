@@ -4,6 +4,8 @@ import math
 import random
 import sys
 
+import pytest
+
 # Ensure the source tree is on the path when running directly.
 sys.path.insert(0, __import__("os").path.join(__import__("os").path.dirname(__file__), ".."))
 
@@ -86,6 +88,21 @@ class TestSimpleGraphDenoiser:
         dx, da = model(features, adjacency, time=0.0)
         assert len(dx) == 1 and len(dx[0]) == 1
         assert len(da) == 1 and len(da[0]) == 1
+
+    def test_zero_num_nodes_raises(self) -> None:
+        """Verify zero num_nodes raises."""
+        with pytest.raises(ValueError, match="num_nodes"):
+            SimpleGraphDenoiser(num_nodes=0, feature_dim=4, seed=0)
+
+    def test_zero_feature_dim_raises(self) -> None:
+        """Verify zero feature_dim raises."""
+        with pytest.raises(ValueError, match="feature_dim"):
+            SimpleGraphDenoiser(num_nodes=4, feature_dim=0, seed=0)
+
+    def test_zero_hidden_dim_raises(self) -> None:
+        """Verify zero hidden_dim raises."""
+        with pytest.raises(ValueError, match="hidden_dim"):
+            SimpleGraphDenoiser(num_nodes=4, feature_dim=4, hidden_dim=0, seed=0)
 
 
 class TestGruMApproximation:

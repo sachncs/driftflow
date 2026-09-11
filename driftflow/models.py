@@ -239,7 +239,17 @@ class SimpleGraphDenoiser:
             feature_dim: Dimensionality of node features (``D``).
             hidden_dim: Width of the two hidden layers in the MLP.
             seed: Random seed for reproducible weight initialisation.
+
+        Raises:
+            ValueError: If any of ``num_nodes``, ``feature_dim``, or
+                ``hidden_dim`` is non-positive.
         """
+        if num_nodes <= 0:
+            raise ValueError(f"num_nodes must be positive, got {num_nodes}")
+        if feature_dim <= 0:
+            raise ValueError(f"feature_dim must be positive, got {feature_dim}")
+        if hidden_dim <= 0:
+            raise ValueError(f"hidden_dim must be positive, got {hidden_dim}")
         self.num_nodes = num_nodes
         self.feature_dim = feature_dim
         self.hidden_dim = hidden_dim
