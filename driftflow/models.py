@@ -169,12 +169,14 @@ def time_embedding(time: float, dim: int) -> list[float]:
     embedding: list[float] = []
     # Frequencies grow exponentially so the embedding can resolve
     # both coarse and fine time scales.
-    for i in range(dim):
-        freq = math.exp(i * math.log(10000.0) / dim) if dim > 0 else 1.0
-        if i % 2 == 0:
-            embedding.append(math.sin(time * freq))
-        else:
-            embedding.append(math.cos(time * freq))
+    if dim > 0:
+        log_base = math.log(10000.0) / dim
+        for i in range(dim):
+            freq = math.exp(i * log_base)
+            if i % 2 == 0:
+                embedding.append(math.sin(time * freq))
+            else:
+                embedding.append(math.cos(time * freq))
     return embedding
 
 
