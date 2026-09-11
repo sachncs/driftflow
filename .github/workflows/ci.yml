@@ -44,8 +44,8 @@ jobs:
       - name: Type check with mypy
         run: python -m mypy driftflow
 
-      - name: Run test suite
-        run: python -m pytest tests/ -q
+      - name: Run test suite with 100% coverage gate
+        run: python -m pytest tests/ --cov=driftflow --cov-report=term-missing --cov-fail-under=100 -q
 
       - name: Run demo smoke test
         run: python examples/demo.py --model GruM --dataset QM9 --solver Euler --use-approximation > /dev/null

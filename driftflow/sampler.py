@@ -823,6 +823,23 @@ class DVSSampler:
         self.gamma = gamma
 
     @staticmethod
+    def _require_cached_drifts(
+        cached_drift_features: list[list[float]] | None,
+        cached_drift_adjacency: list[list[float]] | None,
+    ) -> tuple[list[list[float]], list[list[float]]]:
+        """Return the cached drifts, raising ``RuntimeError`` if either is ``None``.
+
+        Defensive runtime guard for the :meth:`sample` loop: the
+        ``dvs_active`` gate upstream already enforces the non-``None``
+        invariant, but ``assert``-based narrowing is stripped under
+        ``PYTHONOPTIMIZE`` / ``-O``.  This helper keeps the contract
+        loud if a future refactor weakens the upstream gate.
+        """
+        if cached_drift_features is None or cached_drift_adjacency is None:
+            raise RuntimeError("internal error: cached drift missing despite dvs_active")
+        return cached_drift_features, cached_drift_adjacency
+
+    @staticmethod
     def resolve_gamma(dataset_config: DatasetConfig, solver: str) -> float | None:
         """Resolve the solver-specific aggregation factor ``gamma``.
 
@@ -996,11 +1013,16 @@ class DVSSampler:
 
             if dvs_active:
                 # ``dvs_active`` is only true when both cached drifts
-                # are non-None; the explicit guards below preserve the
-                # contract under ``PYTHONOPTIMIZE`` / ``-O`` builds
-                # where ``assert`` statements are stripped.
-                if cached_drift_features is None or cached_drift_adjacency is None:
-                    raise RuntimeError("internal error: cached drift missing despite dvs_active")
+                # are non-None; the helper below preserves the contract
+                # under ``PYTHONOPTIMIZE`` / ``-O`` builds where
+                # ``assert`` statements are stripped, and keeps the
+                # contract loud if a future refactor weakens the
+                # upstream gate.
+                cached_drift_features, cached_drift_adjacency = (
+                    self._require_cached_drifts(
+                        cached_drift_features, cached_drift_adjacency
+                    )
+                )
                 # Equation 13: Drift Variation Score.
                 v_x, v_a = compute_drift_variation_score(
                     drift_features,
