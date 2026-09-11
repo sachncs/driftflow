@@ -77,12 +77,21 @@ Interactions with other modules
   diffusion noise scale ``g_t``.
 """
 
+import logging
 import math
 import random
 from collections.abc import Callable
 
 from .config import CommonConfig, DatasetConfig
 from .utils import clip_value
+
+_LOGGER = logging.getLogger(__name__)
+"""Module logger for sampler-internal events.
+
+Verbose per-step diagnostics are emitted at ``INFO`` level via this
+logger rather than ``print``, allowing host applications to route or
+silence them through the standard :mod:`logging` machinery.
+"""
 
 # ---------------------------------------------------------------------------
 # Type aliases
@@ -1008,10 +1017,13 @@ class DVSSampler:
                 smoothed_x, smoothed_a = global_refresh(smoothed_x, smoothed_a, self.gamma)
 
                 if verbose:
-                    print(
-                        f"step={step_index:4d} time={time:.6f} "
-                        f"active dvs dt={timestep:.6f} "
-                        f"v_x={v_x:.4e} v_a={v_a:.4e}"
+                    _LOGGER.info(
+                        "step=%d time=%.6f active dvs dt=%.6f v_x=%.4e v_a=%.4e",
+                        step_index,
+                        time,
+                        timestep,
+                        v_x,
+                        v_a,
                     )
             else:
                 # DVS not active -- fall back to the fixed base step.
@@ -1019,7 +1031,9 @@ class DVSSampler:
                 v_x = 0.0
                 v_a = 0.0
                 if verbose:
-                    print(f"step={step_index:4d} time={time:.6f} base   dt={timestep:.6f}")
+                    _LOGGER.info(
+                        "step=%d time=%.6f base dt=%.6f", step_index, time, timestep
+                    )
 
             # Do not overshoot the terminal time -- shrink the last
             # step if necessary.
