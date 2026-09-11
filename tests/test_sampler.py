@@ -1452,6 +1452,15 @@ class TestSolverRegistry:
         with pytest.raises(ValueError, match="solver must be one of"):
             self.make_sampler("DefinitelyNotASolver")
 
+    def test_cached_drift_guard_fires_on_contract_violation(self) -> None:
+        """Verify the dvs_active None-check raises when contract is violated."""
+        with pytest.raises(RuntimeError, match="cached drift missing"):
+            DVSSampler._require_cached_drifts(None, [[0.0]])
+        with pytest.raises(RuntimeError, match="cached drift missing"):
+            DVSSampler._require_cached_drifts([[0.0]], None)
+        drift = DVSSampler._require_cached_drifts([[0.0]], [[0.0]])
+        assert drift == ([[0.0]], [[0.0]])
+
     def test_cannot_overwrite_builtin_solver(self) -> None:
         """Verify register_solver refuses to shadow a built-in name."""
         with pytest.raises(ValueError, match="Cannot overwrite built-in"):
