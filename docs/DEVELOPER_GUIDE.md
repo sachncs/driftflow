@@ -22,27 +22,16 @@ python -m pip install -e ".[dev]"
 
 ## 2. Running Tests
 
-The project uses a lightweight custom test runner that works without pytest (for maximum portability), but pytest is also supported via `pyproject.toml` configuration.
+The project's test runner is **pytest**, configured in `pyproject.toml` (`[tool.pytest.ini_options]`). CI (`scripts/ci.sh` and `.github/workflows/ci.yml`) only ever invokes `python -m pytest`.
 
-### Without pytest
-
-```bash
-# Run each test file individually
-python tests/test_sampler.py
-python tests/test_config.py
-python tests/test_models.py
-python tests/test_schedule.py
-python tests/test_utils.py
-
-# Or run all in a loop
-for f in tests/test_*.py; do python "$f"; done
-```
-
-### With pytest
+### With pytest (canonical)
 
 ```bash
 # Run the entire suite
 python -m pytest
+
+# Run with verbose output
+python -m pytest -v
 
 # Run with coverage
 python -m pytest --cov=driftflow --cov-report=term-missing
@@ -51,16 +40,28 @@ python -m pytest --cov=driftflow --cov-report=term-missing
 python -m pytest tests/test_sampler.py::TestDVSSamplerEndToEnd -v
 ```
 
+### Running test files directly (debugging aid)
+
+Each test file ends with an `if __name__ == "__main__":` block that
+allows running the file as a script. This is useful when iterating on
+one test in isolation without paying pytest's collection cost:
+
+```bash
+python tests/test_sampler.py
+```
+
+This fallback exists for development convenience; CI does not use it.
+
 ### Current Test Count
 
 | File | Tests |
 |------|-------|
-| `test_sampler.py` | 82 |
+| `test_sampler.py` | 90 |
 | `test_config.py` | 15 |
-| `test_models.py` | 23 |
-| `test_schedule.py` | 18 |
+| `test_models.py` | 26 |
+| `test_schedule.py` | 20 |
 | `test_utils.py` | 27 |
-| **Total** | **165** |
+| **Total** | **178** |
 
 ---
 
