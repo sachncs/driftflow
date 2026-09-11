@@ -119,29 +119,43 @@ sys.path.insert(0, __import__("os").path.join(__import__("os").path.dirname(__fi
 
 ## 6. Adding a New Solver
 
-1. Implement the step function in `sampler.py`:
+The sampler exposes a pluggable solver registry; new integrators are
+added without touching `DVSSampler.sample()` or `DVSSampler.__init__`.
+
+1. Implement a step function (in `sampler.py` or your own module) that
+   conforms to the uniform :data:`SolverStep` signature:
+
    ```python
-   def my_solver_step(
-       features, adjacency, drift_features, drift_adjacency,
-       timestep, noise_scale, drift_function, time, rng
-   ):
-       # Your logic here
+   def my_solver_step(features, adjacency, fx, fa, dt, noise, rng, drift, t):
+       # ... your logic ...
        return next_features, next_adjacency
    ```
 
-2. Add the solver branch in `DVSSampler.sample()`:
+2. Register the new solver with the registry:
+
    ```python
-   if self.solver == "MySolver":
-       next_features, next_adjacency = my_solver_step(...)
+   from driftflow import register_solver
+   register_solver("MySolver", my_solver_step)
    ```
 
-3. Update `DVSSampler.__init__` to accept the new solver name:
+   `register_solver` refuses to overwrite a built-in name (`"Euler"`
+   or `"Heun"`) to prevent accidental shadowing. Pick a distinct
+   name, or pop the existing entry from `SOLVERS` first.
+
+3. Map the solver to the right gamma field on
+   `~driftflow.config.DatasetConfig`:
+
    ```python
-   if solver not in {"Euler", "Heun", "MySolver"}:
-       raise ValueError(...)
+   from driftflow.sampler import register_gamma_field
+   register_gamma_field("MySolver", "gamma_heun")  # or your own field
    ```
 
-4. Add tests in `test_sampler.py` and update the `__init__.py` exports if needed.
+   Without an entry, `DVSSampler.resolve_gamma` falls back to
+   `gamma_heun` for backward compatibility.
+
+4. Add tests in `tests/test_sampler.py` and unregister the new
+   solver (via `SOLVERS.pop(...)` and
+   `SOLVER_GAMMA_FIELDS.pop(...)`) in a `finally` block.
 
 ---
 
