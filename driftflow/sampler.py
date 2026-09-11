@@ -919,9 +919,14 @@ class DVSSampler:
             )
 
             if dvs_active:
-                # Mypy narrowing: we already checked ``is not None``.
-                assert cached_drift_features is not None
-                assert cached_drift_adjacency is not None
+                # ``dvs_active`` is only true when both cached drifts
+                # are non-None; the explicit guards below preserve the
+                # contract under ``PYTHONOPTIMIZE`` / ``-O`` builds
+                # where ``assert`` statements are stripped.
+                if cached_drift_features is None or cached_drift_adjacency is None:
+                    raise RuntimeError(
+                        "internal error: cached drift missing despite dvs_active"
+                    )
                 # Equation 13: Drift Variation Score.
                 v_x, v_a = compute_drift_variation_score(
                     drift_features,
