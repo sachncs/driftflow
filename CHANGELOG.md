@@ -101,7 +101,7 @@ chronological order, with the full commit id, ISO-8601 datetime
 - `.editorconfig` for consistent editor formatting
 - `.gitattributes` for line ending normalization
 - `py.typed` PEP 561 marker for type checking support
-- `docs/deployment.md` for production deployment guidance
+- `docs/DEPLOYMENT.md` for production deployment guidance
 - GitHub issue templates for bug reports and feature requests
 - Pull request template
 - Dependabot configuration for automated dependency updates

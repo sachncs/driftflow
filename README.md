@@ -259,7 +259,7 @@ driftflow/
 ├── docs/                   # Extended documentation
 │   ├── API_REFERENCE.md    # Complete public API docs
 │   ├── ARCHITECTURE.md     # System design and data flow
-│   ├── DEPLOYMENT.md       # Production deployment guide
+│   ├── DEPLOYMENT.md       # Production deployment guide (in docs/)
 │   ├── DEVELOPER_GUIDE.md  # Dev workflow, testing, linting
 │   ├── EXTENSIONS.md       # Optional enhancements roadmap
 │   ├── INDEX.md            # Documentation index
