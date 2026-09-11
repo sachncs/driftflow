@@ -7,8 +7,8 @@ This document covers deploying `driftflow` in various environments.
 ### From Source (Recommended)
 
 ```bash
-git clone https://github.com/sachncs/information-geometric-adaptive-sampling.git
-cd information-geometric-adaptive-sampling
+git clone https://github.com/sachncs/driftflow.git
+cd driftflow
 pip install -e .
 ```
 
