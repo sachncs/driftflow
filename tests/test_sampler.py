@@ -503,9 +503,7 @@ class TestHeunStep:
         )
 
         rng_euler = random.Random(42)
-        euler_x, euler_a = euler_step(
-            features, adjacency, f1_x, f1_a, dt, g, rng_euler
-        )
+        euler_x, euler_a = euler_step(features, adjacency, f1_x, f1_a, dt, g, rng_euler)
 
         # With constant drift the Heun trapezoidal average collapses to
         # the predictor drift, so Heun must equal Euler when both share
@@ -540,9 +538,7 @@ class TestHeunStep:
             def setstate(s, state: object) -> None:  # noqa: N805
                 real.setstate(state)
 
-        heun_step(
-            features, adjacency, f1_x, f1_a, 0.01, 0.5, drift_fn, 0.0, _Proxy()
-        )
+        heun_step(features, adjacency, f1_x, f1_a, 0.01, 0.5, drift_fn, 0.0, _Proxy())
 
         # Predictor draws noise for features (4) + adjacency (2) = 6 draws.
         # The corrector reuses those same draws and must not advance the
