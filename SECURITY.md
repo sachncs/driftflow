@@ -11,7 +11,7 @@
 If you discover a security vulnerability within this project, please report it
 responsibly. **Do not open a public GitHub issue for security vulnerabilities.**
 
-Please send a description of the vulnerability to **[INSERT EMAIL]**. You should
+Please send a description of the vulnerability to **sachncs@gmail.com**. You should
 receive a response within 48 hours. If for some reason you do not, please follow
 up to ensure we received your original message.
 
