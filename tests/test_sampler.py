@@ -484,6 +484,71 @@ class TestHeunStep:
         assert next_x == features
         assert next_a == adjacency
 
+    def test_corrector_shares_noise_with_predictor(self) -> None:
+        """Verify corrector reuses the predictor's noise draw (paper-faithful Z)."""
+
+        def constant_drift(x, a, t):
+            return [[1.0, 1.0], [1.0, 1.0]], [[1.0], [1.0]]
+
+        features = [[0.0, 0.0], [0.0, 0.0]]
+        adjacency = [[0.0], [0.0]]
+        f1_x = [[1.0, 1.0], [1.0, 1.0]]
+        f1_a = [[1.0], [1.0]]
+        dt = 0.01
+        g = 1.0  # non-zero noise
+
+        rng_heun = random.Random(42)
+        heun_x, heun_a = heun_step(
+            features, adjacency, f1_x, f1_a, dt, g, constant_drift, 0.0, rng_heun
+        )
+
+        rng_euler = random.Random(42)
+        euler_x, euler_a = euler_step(
+            features, adjacency, f1_x, f1_a, dt, g, rng_euler
+        )
+
+        # With constant drift the Heun trapezoidal average collapses to
+        # the predictor drift, so Heun must equal Euler when both share
+        # the same RNG sequence (same Z applied to the same state).
+        assert heun_x == euler_x
+        assert heun_a == euler_a
+
+    def test_corrector_does_not_advance_rng(self) -> None:
+        """Verify the corrector does not consume additional RNG state beyond the predictor's."""
+        state_calls: list[object] = []
+        real = random.Random(0)
+
+        def drift_fn(x, a, t):
+            return [[1.0, 1.0], [1.0, 1.0]], [[1.0], [1.0]]
+
+        features = [[0.0, 0.0], [0.0, 0.0]]
+        adjacency = [[0.0], [0.0]]
+        f1_x = [[1.0, 1.0], [1.0, 1.0]]
+        f1_a = [[1.0], [1.0]]
+
+        rng_proxy = random.Random(42)  # unused: replaced with explicit proxy below
+        del rng_proxy
+
+        class _Proxy:
+            def gauss(s, mu: float, sigma: float) -> float:  # noqa: N805
+                state_calls.append(s.getstate())
+                return real.gauss(mu, sigma)
+
+            def getstate(s) -> object:  # noqa: N805
+                return real.getstate()
+
+            def setstate(s, state: object) -> None:  # noqa: N805
+                real.setstate(state)
+
+        heun_step(
+            features, adjacency, f1_x, f1_a, 0.01, 0.5, drift_fn, 0.0, _Proxy()
+        )
+
+        # Predictor draws noise for features (4) + adjacency (2) = 6 draws.
+        # The corrector reuses those same draws and must not advance the
+        # RNG further.
+        assert len(state_calls) == 6
+
 
 class TestDVSSamplerEndToEnd:
     """End-to-end smoke tests for the full sampler."""
