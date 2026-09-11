@@ -390,8 +390,7 @@ def add_drift_and_noise(
     for state_row, drift_row in zip(state, drift, strict=True):
         if len(state_row) != len(drift_row):
             raise ValueError(
-                f"add_drift_and_noise: row width mismatch "
-                f"({len(state_row)} vs {len(drift_row)})"
+                f"add_drift_and_noise: row width mismatch ({len(state_row)} vs {len(drift_row)})"
             )
         new_row: list[float] = []
         for state_val, drift_val in zip(state_row, drift_row, strict=True):
@@ -498,6 +497,7 @@ def heun_step(
         With constant drift (``f2 == f1``) the method reduces exactly
         to the Euler-Maruyama update; the unit tests verify this.
     """
+
     # Draw the noise realisation Z once and share it between the
     # predictor and the corrector so that the corrector trapezoidal
     # rule remains consistent with the same Brownian path (paper
@@ -620,6 +620,37 @@ def heun_dispatch(
 
 SOLVERS["Euler"] = euler_dispatch
 SOLVERS["Heun"] = heun_dispatch
+
+
+# ---------------------------------------------------------------------------
+# Solver -> gamma-field mapping
+# ---------------------------------------------------------------------------
+# ``DatasetConfig`` exposes two named gamma fields (``gamma_euler`` and
+# ``gamma_heun``) and the resolver historically fell back to
+# ``gamma_heun`` for any non-``"Euler"`` solver, silently biasing the
+# global refresh for custom integrators.  Contributors registering a
+# new solver should also add an entry below (or subclass
+# :class:`DVSSampler`) so the resolver picks the correct field.
+SOLVER_GAMMA_FIELDS: dict[str, str] = {
+    "Euler": "gamma_euler",
+    "Heun": "gamma_heun",
+}
+"""Mapping from a registered solver name to the :class:`DatasetConfig`
+attribute that holds its aggregation factor ``gamma``."""
+
+
+def register_gamma_field(solver: str, field_name: str) -> None:
+    """Register the :class:`DatasetConfig` attribute for ``solver``.
+
+    `` `` ``
+        `` `` ``
+        New solvers added via :func:`register_solver` should also call this
+        helper to make their gamma resolution explicit.  Without an entry,
+        :meth:`DVSSampler.resolve_gamma` falls back to ``gamma_heun`` for
+        backward compatibility -- callers relying on the default are not
+        affected; new integrators should opt in to a named field instead.
+    """
+    SOLVER_GAMMA_FIELDS[solver] = field_name
 
 
 def register_solver(name: str, step_function: SolverStep) -> None:
@@ -765,12 +796,13 @@ class DVSSampler:
     def resolve_gamma(dataset_config: DatasetConfig, solver: str) -> float | None:
         """Resolve the solver-specific aggregation factor ``gamma``.
 
-        Known first-order and second-order solvers read ``gamma_euler``
-        and ``gamma_heun`` respectively.  Registering an entirely new
-        solver in :data:`SOLVERS` maps back to one of these two fields
-        (the heuristic: any solver reporting a second-order error
-        profile maps to ``gamma_heun``); subclasses may override this
-        method for a fully custom mapping.
+        Built-in solvers (``"Euler"``, ``"Heun"``) map directly to their
+        named :class:`DatasetConfig` fields.  Custom solvers registered
+        via :func:`register_solver` should also be registered with
+        :func:`register_gamma_field` so their gamma is resolved from
+        the appropriate field.  Solvers that are not registered fall
+        back to ``gamma_heun`` for backward compatibility; subclasses
+        may override this method for a fully custom mapping.
 
         Args:
             dataset_config: The dataset configuration containing the
@@ -781,9 +813,8 @@ class DVSSampler:
             The aggregation factor, or ``None`` if the model/dataset
             does not support this solver.
         """
-        if solver == "Euler":
-            return dataset_config.gamma_euler
-        return dataset_config.gamma_heun
+        field_name = SOLVER_GAMMA_FIELDS.get(solver, "gamma_heun")
+        return getattr(dataset_config, field_name, None)
 
     @staticmethod
     def validate_sample_inputs(
@@ -939,9 +970,7 @@ class DVSSampler:
                 # contract under ``PYTHONOPTIMIZE`` / ``-O`` builds
                 # where ``assert`` statements are stripped.
                 if cached_drift_features is None or cached_drift_adjacency is None:
-                    raise RuntimeError(
-                        "internal error: cached drift missing despite dvs_active"
-                    )
+                    raise RuntimeError("internal error: cached drift missing despite dvs_active")
                 # Equation 13: Drift Variation Score.
                 v_x, v_a = compute_drift_variation_score(
                     drift_features,
