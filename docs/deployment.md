@@ -111,7 +111,7 @@ def generate_graph(drift_function, model, dataset, seed=None):
 ### Performance Considerations
 
 - **Numerical stability:** Use the default `eps_num=1e-12` unless you have specific requirements.
-- **Solver choice:** Euler is faster; Heun is more accurate. Choose based on your accuracy/performance tradeoff.
+- **Solver choice:** Euler is the fast first-order integrator; Heun is a second-order predictor-corrector that requires an extra drift evaluation per step. With zero noise the two reduce to Euler-equivalent; for non-zero noise Heun's accuracy advantage depends on the corrector sharing the Brownian path with the predictor, which the current implementation enforces (see `docs/MATH.md §9`).
 - **Timestep bounds:** Adjust `dt_min` and `dt_max` if you observe convergence issues or excessive step counts.
 
 ### Resource Usage
