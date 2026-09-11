@@ -1452,6 +1452,13 @@ class TestSolverRegistry:
         with pytest.raises(ValueError, match="solver must be one of"):
             self.make_sampler("DefinitelyNotASolver")
 
+    def test_cannot_overwrite_builtin_solver(self) -> None:
+        """Verify register_solver refuses to shadow a built-in name."""
+        with pytest.raises(ValueError, match="Cannot overwrite built-in"):
+            register_solver("Euler", self.make_sampler("Euler").drift_function)
+        with pytest.raises(ValueError, match="Cannot overwrite built-in"):
+            register_solver("Heun", self.make_sampler("Heun").drift_function)
+
     def test_registered_gamma_field_used_by_resolver(self) -> None:
         """Verify register_gamma_field routes a solver to the named field."""
         from driftflow.sampler import SOLVER_GAMMA_FIELDS, register_gamma_field

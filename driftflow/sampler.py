@@ -630,6 +630,15 @@ def heun_dispatch(
 SOLVERS["Euler"] = euler_dispatch
 SOLVERS["Heun"] = heun_dispatch
 
+_BUILTIN_SOLVER_NAMES = frozenset({"Euler", "Heun"})
+"""Names of solvers shipped with ``driftflow``.
+
+:func:`register_solver` refuses to overwrite an entry that is already
+present under one of these names; use a distinct name (or unregister
+the name first via ``SOLVERS.pop``) to register a parallel
+implementation.
+"""
+
 
 # ---------------------------------------------------------------------------
 # Solver -> gamma-field mapping
@@ -670,11 +679,18 @@ def register_solver(name: str, step_function: SolverStep) -> None:
     new integrators without modifying the sampler loop.
 
     Args:
-        name: Solver name used as the ``solver=`` argument.  Overwriting
-            an existing name replaces the previous implementation.
+        name: Solver name used as the ``solver=`` argument.  Must not
+            collide with a built-in name that is already registered
+            (currently ``"Euler"`` and ``"Heun"``); pick a distinct
+            name to register a parallel implementation, or remove the
+            existing entry via ``SOLVERS.pop`` first.
         step_function: Callable with the uniform :data:`SolverStep`
             signature ``(X, A, f_X, f_A, dt, noise, rng, drift, t)``
             returning the updated ``(X, A)`` pair.
+
+    Raises:
+        ValueError: If ``name`` matches a built-in solver that is
+            already registered, to prevent accidental shadowing.
 
     Note:
         A custom solver still needs a matching ``gamma`` in the
@@ -683,8 +699,13 @@ def register_solver(name: str, step_function: SolverStep) -> None:
         aggregation factor from the dataset configuration.  Map the
         custom name to the appropriate ``gamma`` field at construction
         time by choosing which field the sampler reads (see
-        :meth:`DVSSampler.resolve_gamma`).
+        :meth:`DVSSampler.resolve_gamma` and
+        :func:`register_gamma_field`).
     """
+    if name in _BUILTIN_SOLVER_NAMES and name in SOLVERS:
+        raise ValueError(
+            f"Cannot overwrite built-in solver {name!r}; use a distinct name"
+        )
     SOLVERS[name] = step_function
 
 
