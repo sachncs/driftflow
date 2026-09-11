@@ -1,14 +1,18 @@
-<p align="center">
-  <h1 align="center">driftflow</h1>
-  <p align="center">driftflow — adaptive SDE sampling for graph diffusion, driven by the Drift Variation Score (DVS). A pure-Python reproduction of the information-geometric adaptive sampler.</p>
-  <p align="center">
-    <a href="#installation"><img src="https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue" alt="Python"></a>
-    <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="License"></a>
-    <a href="https://github.com/sachncs/driftflow/actions"><img src="https://img.shields.io/github/actions/workflow/status/sachncs/driftflow/ci.yml?branch=master" alt="CI"></a>
-    <a href="https://github.com/sachncs/driftflow/stargazers"><img src="https://img.shields.io/github/stars/sachncs/driftflow" alt="Stars"></a>
-    <a href="https://mypy-lang.org/"><img src="https://img.shields.io/badge/mypy-strict-green.svg" alt="Checked with mypy"></a>
-  </p>
-</p>
+<div align="center">
+
+# driftflow
+
+**Adaptive SDE sampling for graph diffusion, driven by the Drift Variation Score (DVS).**
+
+A pure-Python reproduction of the information-geometric adaptive sampler.
+
+[![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-blue)](#installation)
+[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![CI](https://img.shields.io/github/actions/workflow/status/sachncs/driftflow/ci.yml?branch=master)](https://github.com/sachncs/driftflow/actions)
+[![Stars](https://img.shields.io/github/stars/sachncs/driftflow)](https://github.com/sachncs/driftflow/stargazers)
+[![Checked with mypy](https://img.shields.io/badge/mypy-strict-green.svg)](https://mypy-lang.org/)
+
+</div>
 
 **driftflow** is a pure-Python implementation of the **Drift Variation Score
 (DVS) adaptive sampler** for graph diffusion models. It reproduces the
