@@ -25,8 +25,8 @@ python -m ruff format --check driftflow/ tests/ examples/
 step "Type check with mypy"
 python -m mypy driftflow
 
-step "Run test suite"
-python -m pytest tests/ -q
+step "Run test suite with 100% coverage gate"
+python -m pytest tests/ --cov=driftflow --cov-fail-under=100 -q
 
 step "Run demo smoke test"
 python examples/demo.py --model GruM --dataset QM9 --solver Euler --use-approximation > /dev/null
