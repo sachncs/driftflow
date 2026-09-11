@@ -275,7 +275,7 @@ Before cutting a release:
 3. Bump the version in the single source of truth
    `driftflow/version.py` (this propagates to `driftflow.__version__`,
    the sdist, and the wheel).  The `CHANGELOG.md` minimum version reference
-   in `docs/deployment.md` should be checked.
+   in `docs/DEPLOYMENT.md` should be checked.
 4. Update `CHANGELOG.md` with the new release section.
 5. Build the package:
    ```bash
