@@ -39,11 +39,11 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://arxiv.org/abs/2605.00250"
-Repository = "https://github.com/sachncs/information-geometric-adaptive-sampling"
-Documentation = "https://github.com/sachncs/information-geometric-adaptive-sampling/tree/main/docs"
-Changelog = "https://github.com/sachncs/information-geometric-adaptive-sampling/blob/main/CHANGELOG.md"
-Issues = "https://github.com/sachncs/information-geometric-adaptive-sampling/issues"
+Homepage = "https://github.com/sachncs/driftflow"
+Repository = "https://github.com/sachncs/driftflow"
+Documentation = "https://github.com/sachncs/driftflow/tree/main/docs"
+Changelog = "https://github.com/sachncs/driftflow/blob/main/CHANGELOG.md"
+Issues = "https://github.com/sachncs/driftflow/issues"
 
 [tool.setuptools.packages.find]
 include = ["driftflow*"]
