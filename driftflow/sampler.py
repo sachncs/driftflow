@@ -703,9 +703,7 @@ def register_solver(name: str, step_function: SolverStep) -> None:
         :func:`register_gamma_field`).
     """
     if name in _BUILTIN_SOLVER_NAMES and name in SOLVERS:
-        raise ValueError(
-            f"Cannot overwrite built-in solver {name!r}; use a distinct name"
-        )
+        raise ValueError(f"Cannot overwrite built-in solver {name!r}; use a distinct name")
     SOLVERS[name] = step_function
 
 
@@ -1018,10 +1016,8 @@ class DVSSampler:
                 # ``assert`` statements are stripped, and keeps the
                 # contract loud if a future refactor weakens the
                 # upstream gate.
-                cached_drift_features, cached_drift_adjacency = (
-                    self._require_cached_drifts(
-                        cached_drift_features, cached_drift_adjacency
-                    )
+                cached_drift_features, cached_drift_adjacency = self._require_cached_drifts(
+                    cached_drift_features, cached_drift_adjacency
                 )
                 # Equation 13: Drift Variation Score.
                 v_x, v_a = compute_drift_variation_score(
@@ -1074,9 +1070,7 @@ class DVSSampler:
                 v_x = 0.0
                 v_a = 0.0
                 if verbose:
-                    _LOGGER.info(
-                        "step=%d time=%.6f base dt=%.6f", step_index, time, timestep
-                    )
+                    _LOGGER.info("step=%d time=%.6f base dt=%.6f", step_index, time, timestep)
 
             # Do not overshoot the terminal time -- shrink the last
             # step if necessary.
