@@ -79,6 +79,19 @@ class TestCosineSchedule:
             assert math.isfinite(val)
             assert val > 0.0
 
+    def test_at_one_is_finite_and_bounded(self) -> None:
+        """Verify schedule at t=1.0 is finite (no tan(pi/2) singularity)."""
+        sched = CosineSchedule(offset=0.008)
+        val = sched(1.0)
+        assert math.isfinite(val)
+        assert val < 1.0e13
+
+    def test_offset_zero_clam_st(self) -> None:
+        """Verify even with tiny offset, t=1.0 stays finite."""
+        sched = CosineSchedule(offset=1e-6)
+        val = sched(1.0)
+        assert math.isfinite(val)
+
 
 class TestPolynomialSchedule:
     """Tests for the polynomial noise schedule."""
