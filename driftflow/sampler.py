@@ -498,40 +498,55 @@ def heun_step(
         With constant drift (``f2 == f1``) the method reduces exactly
         to the Euler-Maruyama update; the unit tests verify this.
     """
+    # Draw the noise realisation Z once and share it between the
+    # predictor and the corrector so that the corrector trapezoidal
+    # rule remains consistent with the same Brownian path (paper
+    # faithfulness, see docs/MATH.md §9 and CQ-1).
+    def _draw_noise(matrix: list[list[float]]) -> list[list[float]]:
+        return [[noise_scale * rng.gauss(0.0, 1.0) for _ in row] for row in matrix]
+
+    shared_noise_features = _draw_noise(features)
+    shared_noise_adjacency = _draw_noise(adjacency)
+
     # Predictor: standard Euler-Maruyama step using the first-stage drift.
-    predicted_features = add_drift_and_noise(
-        features, first_drift_features, timestep, noise_scale, rng
-    )
-    predicted_adjacency = add_drift_and_noise(
-        adjacency, first_drift_adjacency, timestep, noise_scale, rng
-    )
+    predicted_features = [
+        [s + f * timestep + n for s, f, n in zip(sr, fr, nr, strict=True)]
+        for sr, fr, nr in zip(features, first_drift_features, shared_noise_features, strict=True)
+    ]
+    predicted_adjacency = [
+        [s + f * timestep + n for s, f, n in zip(sr, fr, nr, strict=True)]
+        for sr, fr, nr in zip(adjacency, first_drift_adjacency, shared_noise_adjacency, strict=True)
+    ]
 
     # Second drift evaluation at predicted state and t + dt (corrector).
     second_drift_features, second_drift_adjacency = drift_function(
         predicted_features, predicted_adjacency, time + timestep
     )
 
-    # Corrector: trapezoidal average of first and second drifts.
+    # Corrector: trapezoidal average of first and second drifts, reusing
+    # the predictor's noise realisation so the corrector stays on the
+    # same Brownian path.
     def average_and_update(
         state: list[list[float]],
         drift1: list[list[float]],
         drift2: list[list[float]],
+        noise: list[list[float]],
     ) -> list[list[float]]:
         result: list[list[float]] = []
-        for state_row, d1_row, d2_row in zip(state, drift1, drift2, strict=False):
+        for state_row, d1_row, d2_row, noise_row in zip(state, drift1, drift2, noise, strict=True):
             new_row: list[float] = []
-            for s, d1, d2 in zip(state_row, d1_row, d2_row, strict=False):
-                # New noise realisation is independent of the predictor's
-                # noise -- the corrector sees the same Z so the corrector
-                # trapezoidal rule remains a consistent noise scaling.
-                noise = noise_scale * rng.gauss(0.0, 1.0)
+            for s, d1, d2, n in zip(state_row, d1_row, d2_row, noise_row, strict=True):
                 avg_drift = 0.5 * (d1 + d2)
-                new_row.append(s + avg_drift * timestep + noise)
+                new_row.append(s + avg_drift * timestep + n)
             result.append(new_row)
         return result
 
-    next_features = average_and_update(features, first_drift_features, second_drift_features)
-    next_adjacency = average_and_update(adjacency, first_drift_adjacency, second_drift_adjacency)
+    next_features = average_and_update(
+        features, first_drift_features, second_drift_features, shared_noise_features
+    )
+    next_adjacency = average_and_update(
+        adjacency, first_drift_adjacency, second_drift_adjacency, shared_noise_adjacency
+    )
     return next_features, next_adjacency
 
 
