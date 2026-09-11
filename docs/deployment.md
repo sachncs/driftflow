@@ -201,12 +201,13 @@ print("Smoke test passed")
 
 Key metrics to monitor in production:
 
-| Metric | Description | Healthy Range |
-|--------|-------------|---------------|
-| `total_steps` | Number of adaptive steps taken | 10-1000 (varies by problem) |
-| `final_time` | Actual terminal time reached | Close to requested `terminal_time` |
-| `dvs_history` | DVS values at each step | Should converge toward zero |
-| `dt_history` | Timestep sizes | Between `dt_min` and `dt_max` |
+| Metric | Key | Healthy Range |
+|--------|-----|---------------|
+| Total steps | `info["total_steps"][0]` | 10-1000 (varies by problem) |
+| Final time | `info["final_time"][0]` | Close to `terminal_time` |
+| Feature DVS | `info["v_x"]`, `info["smoothed_x"]` | Should converge toward zero |
+| Adjacency DVS | `info["v_a"]`, `info["smoothed_a"]` | Should converge toward zero |
+| Timestep sizes | `info["dt"]` | Between `dt_min` and `dt_max` |
 
 ## Troubleshooting
 
