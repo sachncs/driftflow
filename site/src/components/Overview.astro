@@ -1,0 +1,139 @@
+---
+const metrics = [
+  { value: "165", label: "Tests passing" },
+  { value: "100%", label: "Line coverage" },
+  { value: "0", label: "Runtime deps" },
+  { value: "3", label: "Algorithms" },
+  { value: "8", label: "(Model, Dataset) configs" },
+  { value: "MIT", label: "License" },
+];
+---
+
+<section class="relative py-20 sm:py-28" id="overview">
+  <div class="container-x">
+    <div class="grid grid-cols-1 gap-10 lg:grid-cols-12 lg:gap-16">
+      <div class="lg:col-span-5">
+        <p class="eyebrow">
+          <span class="h-px w-6 bg-aurora-300"></span>
+          Overview
+        </p>
+        <h2 class="display mt-5 text-display-lg text-ink-50">
+          The right step size, exactly when it matters.
+        </h2>
+        <p class="lead mt-6">
+          Graph-diffusion SDE solvers waste work in flat regions and miss
+          curvature in steep ones. <span class="text-ink-100">driftflow</span> measures
+          the local Drift Variation Score — a Fisher-Rao–style signal of how
+          quickly the drift is turning — and resizes each timestep in a single
+          power-law rule. The result is a sampler that takes
+          <em class="not-italic text-ink-100">fewer, better-placed steps</em> without
+          touching your model.
+        </p>
+        <ul class="mt-8 space-y-3 text-ink-200">
+          {
+            [
+              "Training-free — wrap any graph-diffusion drift",
+              "Drop-in replacement for Euler-Maruyama and Heun",
+              "Reproducible with a single seed",
+              "Hyperparameters pre-validated for GruM & GDSS",
+            ].map((t) => (
+              <li class="flex items-start gap-3">
+                <span class="mt-1 grid h-5 w-5 place-items-center rounded-full bg-aurora-500/15 text-aurora-300">
+                  <svg viewBox="0 0 16 16" class="h-3 w-3" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <path d="M3 8l3 3 7-7" stroke-linecap="round" stroke-linejoin="round" />
+                  </svg>
+                </span>
+                <span>{t}</span>
+              </li>
+            ))
+          }
+        </ul>
+      </div>
+
+      <div class="lg:col-span-7">
+        <div class="surface-strong relative overflow-hidden rounded-3xl p-6 sm:p-8">
+          <div class="absolute inset-x-0 -top-24 -z-10 h-72 bg-grid-fade opacity-80"></div>
+
+          <div class="flex items-center justify-between">
+            <p class="eyebrow">Signal · Adaptive timestep</p>
+            <span class="pill"><span class="pill-dot"></span>live preview</span>
+          </div>
+
+          <div class="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {
+              metrics.map((m) => (
+                <div class="surface rounded-2xl px-4 py-5">
+                  <div class="font-display text-3xl tracking-tight text-ink-50 sm:text-4xl">{m.value}</div>
+                  <div class="mt-1 text-xs uppercase tracking-[0.14em] text-ink-400">{m.label}</div>
+                </div>
+              ))
+            }
+          </div>
+
+          <div class="mt-6 code-shell">
+            <div class="border-b border-white/5 bg-white/[0.02] px-4 py-2 text-xs text-ink-300">
+              trajectory · QM9 · Heun
+            </div>
+            <svg viewBox="0 0 600 180" class="block w-full">
+              <defs>
+                <linearGradient id="trail" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stop-color="#B8C5FF" />
+                  <stop offset="60%" stop-color="#8B5CF6" />
+                  <stop offset="100%" stop-color="#6C82FF" />
+                </linearGradient>
+                <linearGradient id="trail-base" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stop-color="rgba(255,255,255,0.4)" />
+                  <stop offset="100%" stop-color="rgba(255,255,255,0.1)" />
+                </linearGradient>
+              </defs>
+              <g stroke="rgba(255,255,255,0.05)" stroke-width="1">
+                <line x1="0" y1="60" x2="600" y2="60" />
+                <line x1="0" y1="120" x2="600" y2="120" />
+              </g>
+              <path
+                d="M5 165 C 60 162, 110 150, 150 130 S 230 60, 290 75 S 360 110, 410 95 S 500 50, 595 30"
+                fill="none"
+                stroke="url(#trail)"
+                stroke-width="2.5"
+                stroke-linecap="round"
+              />
+              <path
+                d="M5 165 L 595 165"
+                fill="none"
+                stroke="url(#trail-base)"
+                stroke-width="1.5"
+                stroke-dasharray="3 4"
+              />
+              <g fill="#B8C5FF">
+                <circle cx="60" cy="160" r="3" />
+                <circle cx="150" cy="130" r="3" />
+                <circle cx="230" cy="78" r="3" />
+                <circle cx="290" cy="75" r="3" />
+                <circle cx="360" cy="110" r="3" />
+                <circle cx="410" cy="95" r="3" />
+                <circle cx="500" cy="50" r="3" />
+                <circle cx="595" cy="30" r="3.5" />
+              </g>
+              <g fill="rgba(255,255,255,0.3)">
+                <circle cx="60" cy="165" r="2" />
+                <circle cx="150" cy="165" r="2" />
+                <circle cx="230" cy="165" r="2" />
+                <circle cx="290" cy="165" r="2" />
+                <circle cx="360" cy="165" r="2" />
+                <circle cx="410" cy="165" r="2" />
+                <circle cx="500" cy="165" r="2" />
+                <circle cx="595" cy="165" r="2" />
+              </g>
+              <text x="6" y="20" fill="#9CA3AF" font-family="JetBrains Mono, monospace" font-size="10">
+                adaptive (DVS)
+              </text>
+              <text x="6" y="178" fill="#6B7280" font-family="JetBrains Mono, monospace" font-size="10">
+                baseline (dt_base)
+              </text>
+            </svg>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>

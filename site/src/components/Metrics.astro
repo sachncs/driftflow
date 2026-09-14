@@ -1,0 +1,84 @@
+---
+const stats = [
+  {
+    value: "165",
+    label: "Unit tests",
+    detail: "Mathematical correctness, edge cases, determinism, input validation.",
+  },
+  {
+    value: "100%",
+    label: "Line coverage",
+    detail: "Coverage-gated in CI: a single missed branch breaks the build.",
+  },
+  {
+    value: "0",
+    label: "Runtime dependencies",
+    detail: "Pure-Python standard library — embeddable anywhere.",
+  },
+  {
+    value: "8",
+    label: "Pre-validated configs",
+    detail: "CommonConfig + every (GruM, GDSS) × dataset entry from Table 7.",
+  },
+];
+---
+
+<section class="relative py-24 sm:py-32">
+  <div class="absolute inset-0 -z-10 line-grid opacity-50"></div>
+  <div class="container-x">
+    <div class="mx-auto max-w-2xl text-center">
+      <p class="eyebrow justify-center">
+        <span class="h-px w-6 bg-aurora-300"></span>
+        Built with rigor
+        <span class="h-px w-6 bg-aurora-300"></span>
+      </p>
+      <h2 class="display mt-5 text-display-lg text-ink-50">
+        Production discipline, research-grade fidelity.
+      </h2>
+      <p class="lead mx-auto mt-5 max-w-xl">
+        driftflow is treated like infrastructure — strict types, gated
+        coverage, deterministic runs, and explicit fail-fast input validation.
+      </p>
+    </div>
+
+    <div class="mt-14 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      {
+        stats.map((s, i) => (
+          <div
+            class="surface rounded-2xl p-6"
+           
+           -delay={i + 1}
+          >
+            <div class="font-display text-5xl tracking-tighter text-ink-50 sm:text-6xl">
+              {s.value}
+            </div>
+            <div class="mt-1 text-sm font-medium text-ink-100">{s.label}</div>
+            <p class="mt-2 text-sm text-ink-400">{s.detail}</p>
+          </div>
+        ))
+      }
+    </div>
+
+    <!-- Trust strip -->
+    <div class="mt-10 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      {
+        [
+          { label: "mypy", value: "strict", icon: "M" },
+          { label: "ruff", value: "lint + format", icon: "R" },
+          { label: "pytest", value: "cov ≥ 100%", icon: "P" },
+          { label: "pip-audit", value: "strict", icon: "A" },
+        ].map((t) => (
+          <div class="surface flex items-center gap-3 rounded-xl px-4 py-3">
+            <span class="grid h-9 w-9 place-items-center rounded-lg border border-white/10 bg-white/[0.04] font-display text-sm font-semibold text-aurora-200">
+              {t.icon}
+            </span>
+            <div class="min-w-0">
+              <div class="text-sm font-medium text-ink-100">{t.label}</div>
+              <div class="truncate text-xs text-ink-400">{t.value}</div>
+            </div>
+          </div>
+        ))
+      }
+    </div>
+  </div>
+</section>

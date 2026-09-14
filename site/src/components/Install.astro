@@ -1,0 +1,96 @@
+---
+const install = `git clone https://github.com/sachncs/driftflow.git
+cd driftflow
+pip install -e .`;
+
+const installDev = `pip install -e ".[dev]"`;
+
+const cli = `# Euler with GruM approximation
+python examples/demo.py --model GruM --dataset QM9 --solver Euler --use-approximation
+
+# Heun with GDSS approximation
+python examples/demo.py --model GDSS --dataset QM9 --solver Heun --use-approximation`;
+---
+
+<section id="install" class="relative py-24 sm:py-32">
+  <div class="container-x">
+    <div class="grid grid-cols-1 gap-10 lg:grid-cols-12 lg:gap-16">
+      <div class="lg:col-span-5">
+        <p class="eyebrow">
+          <span class="h-px w-6 bg-aurora-300"></span>
+          Install
+        </p>
+        <h2 class="display mt-5 text-display-lg text-ink-50">
+          Three lines. Then run the demo.
+        </h2>
+        <p class="lead mt-6">
+          driftflow is a pure-Python package with no compiled extensions. A
+          normal <span class="kbd">pip install</span> is everything you need —
+          the smoke-test CLI is included for GruM and GDSS on QM9.
+        </p>
+        <ul class="mt-8 space-y-3 text-sm text-ink-300">
+          {
+            [
+              "Python 3.10, 3.11, 3.12, 3.13",
+              "Linux · macOS · Windows",
+              "Optional: pip-audit, ruff, mypy, pytest-cov",
+            ].map((t) => (
+              <li class="flex items-center gap-3">
+                <svg viewBox="0 0 16 16" class="h-4 w-4 text-emerald-400" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <path d="M3 8l3 3 7-7" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+                {t}
+              </li>
+            ))
+          }
+        </ul>
+      </div>
+
+      <div class="lg:col-span-7">
+        <div class="space-y-3">
+          <div class="code-shell">
+            <div class="flex items-center justify-between border-b border-white/5 bg-white/[0.02] px-4 py-2 text-xs text-ink-300">
+              <span>Install · from source</span>
+              <button class="btn btn-ghost !py-1 !text-xs" data-copy="#install-code-1">
+                <svg viewBox="0 0 16 16" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                  <rect x="4" y="4" width="9" height="9" rx="1.5" />
+                  <path d="M2 11V3a1 1 0 0 1 1-1h8" />
+                </svg>
+                <span data-label>Copy</span>
+              </button>
+            </div>
+            <pre><code id="install-code-1">{install}</code></pre>
+          </div>
+
+          <div class="code-shell">
+            <div class="flex items-center justify-between border-b border-white/5 bg-white/[0.02] px-4 py-2 text-xs text-ink-300">
+              <span>Optional · dev dependencies</span>
+              <button class="btn btn-ghost !py-1 !text-xs" data-copy="#install-code-2">
+                <svg viewBox="0 0 16 16" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                  <rect x="4" y="4" width="9" height="9" rx="1.5" />
+                  <path d="M2 11V3a1 1 0 0 1 1-1h8" />
+                </svg>
+                <span data-label>Copy</span>
+              </button>
+            </div>
+            <pre><code id="install-code-2">{installDev}</code></pre>
+          </div>
+
+          <div class="code-shell">
+            <div class="flex items-center justify-between border-b border-white/5 bg-white/[0.02] px-4 py-2 text-xs text-ink-300">
+              <span>Run the demo</span>
+              <button class="btn btn-ghost !py-1 !text-xs" data-copy="#install-code-3">
+                <svg viewBox="0 0 16 16" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                  <rect x="4" y="4" width="9" height="9" rx="1.5" />
+                  <path d="M2 11V3a1 1 0 0 1 1-1h8" />
+                </svg>
+                <span data-label>Copy</span>
+              </button>
+            </div>
+            <pre><code id="install-code-3">{cli}</code></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>

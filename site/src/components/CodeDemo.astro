@@ -1,0 +1,202 @@
+---
+const tabs = [
+  {
+    id: "sample",
+    label: "Sample",
+    code: `<span class="tok-kw">from</span> driftflow <span class="tok-kw">import</span> (
+    CommonConfig, DVSSampler, GruMApproximation,
+    LinearSchedule, get_dataset_config, make_drift_function,
+)
+
+approx    = <span class="tok-fn">GruMApproximation</span>(num_nodes=<span class="tok-num">9</span>, feature_dim=<span class="tok-num">4</span>, seed=<span class="tok-num">42</span>)
+drift     = <span class="tok-fn">make_drift_function</span>(approx)
+common    = <span class="tok-fn">CommonConfig</span>()
+dataset   = <span class="tok-fn">get_dataset_config</span>(<span class="tok-str">"GruM"</span>, <span class="tok-str">"QM9"</span>)
+
+sampler = <span class="tok-fn">DVSSampler</span>(
+    drift_function  = drift,
+    noise_schedule  = <span class="tok-fn">LinearSchedule</span>(sigma_min=<span class="tok-num">0.01</span>, sigma_max=<span class="tok-num">0.5</span>),
+    common_config   = common,
+    dataset_config  = dataset,
+    solver          = <span class="tok-str">"Heun"</span>,
+    seed            = <span class="tok-num">42</span>,
+)
+
+features_t, adjacency_t, info = sampler.<span class="tok-fn">sample</span>(
+    initial_features = features_0,
+    initial_adjacency = adjacency_0,
+    terminal_time    = <span class="tok-num">1.0</span>,
+)
+<span class="tok-fn">print</span>(f<span class="tok-str">"steps={info['total_steps'][0]}  time={info['final_time'][0]:.4f}"</span>)`,
+  },
+  {
+    id: "config",
+    label: "Config",
+    code: `<span class="tok-kw">from</span> driftflow <span class="tok-kw">import</span> CommonConfig, DatasetConfig, get_dataset_config
+
+common = <span class="tok-fn">CommonConfig</span>()
+<span class="tok-com"># alpha=0.2, beta=0.5, dt_base=1e-3, dt_min=2e-4, dt_max=5e-3</span>
+
+dataset = <span class="tok-fn">get_dataset_config</span>(<span class="tok-str">"GruM"</span>, <span class="tok-str">"QM9"</span>)
+<span class="tok-com"># kappa_ref=1.0, gamma_euler=0.22, gamma_heun=0.23</span>
+<span class="tok-com"># active_range=[(0.0, 1.0)]</span>
+
+<span class="tok-com"># Or build your own — Table 7 entries are dataclasses:</span>
+custom = DatasetConfig(
+    kappa_ref  = <span class="tok-num">5.0</span>,
+    gamma_euler = <span class="tok-num">0.02</span>,
+    gamma_heun  = <span class="tok-num">0.04</span>,
+    active_range = [(<span class="tok-num">0.0</span>, <span class="tok-num">1.0</span>)],
+)`,
+  },
+  {
+    id: "schedule",
+    label: "Schedule",
+    code: `<span class="tok-kw">from</span> driftflow <span class="tok-kw">import</span> (
+    LinearSchedule, CosineSchedule, PolynomialSchedule, constant_schedule,
+)
+
+<span class="tok-com"># Linear g(t) = sigma_min + (sigma_max - sigma_min) * t</span>
+linear = <span class="tok-fn">LinearSchedule</span>(sigma_min=<span class="tok-num">0.01</span>, sigma_max=<span class="tok-num">0.5</span>)
+
+<span class="tok-com"># Improved-DDPM-style cosine</span>
+cosine = <span class="tok-fn">CosineSchedule</span>(offset=<span class="tok-num">0.008</span>)
+
+<span class="tok-com"># Power-law g(t) = sigma_max * t**exponent + sigma_min</span>
+poly   = <span class="tok-fn">PolynomialSchedule</span>(exponent=<span class="tok-num">2.0</span>,
+                                sigma_min=<span class="tok-num">0.0</span>,
+                                sigma_max=<span class="tok-num">1.0</span>)
+
+<span class="tok-com"># Deterministic constant schedule (useful for testing)</span>
+const = constant_schedule(<span class="tok-num">0.1</span>)
+
+<span class="tok-com"># Or supply your own callable as the noise schedule.</span>`,
+  },
+  {
+    id: "solver",
+    label: "Solvers",
+    code: `<span class="tok-kw">from</span> driftflow <span class="tok-kw">import</span> DVSSampler, SOLVERS, register_solver
+
+<span class="tok-com"># Built-in solvers:</span>
+<span class="tok-fn">print</span>(<span class="tok-fn">list</span>(SOLVERS))        <span class="tok-com"># ['Euler', 'Heun']</span>
+
+<span class="tok-com"># Swap solver at construction time:</span>
+sampler = <span class="tok-fn">DVSSampler</span>(..., solver=<span class="tok-str">"Heun"</span>)
+
+<span class="tok-com"># Register a custom step (must follow the (drift, X, A, t, dt, g) -> (X, A) contract):</span>
+<span class="tok-kw">def</span> <span class="tok-fn">my_step</span>(drift, X, A, t, dt, g):
+    f_X, f_A = drift(X, A, t)
+    <span class="tok-kw">return</span> (
+        [row[:] <span class="tok-kw">for</span> row <span class="tok-kw">in</span> X],   <span class="tok-com"># placeholder update</span>
+        [row[:] <span class="tok-kw">for</span> row <span class="tok-kw">in</span> A],
+    )
+
+<span class="tok-fn">register_solver</span>(<span class="tok-str">"Mine"</span>, my_step)
+sampler = <span class="tok-fn">DVSSampler</span>(..., solver=<span class="tok-str">"Mine"</span>)`,
+  },
+];
+---
+
+<section id="api" class="relative py-24 sm:py-32">
+  <div class="container-x">
+    <div class="mx-auto max-w-2xl text-center">
+      <p class="eyebrow justify-center">
+        <span class="h-px w-6 bg-aurora-300"></span>
+        Developer API
+        <span class="h-px w-6 bg-aurora-300"></span>
+      </p>
+      <h2 class="display mt-5 text-display-lg text-ink-50">
+        A surface that fits in your head.
+      </h2>
+      <p class="lead mx-auto mt-5 max-w-xl">
+        Four imports. One sampler. Hyperparameters pre-validated for GruM and
+        GDSS. Everything else is just a dataclass.
+      </p>
+    </div>
+
+    <div class="mt-12">
+      <div class="surface-strong overflow-hidden rounded-3xl">
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-white/5 bg-white/[0.02] px-3 sm:px-5">
+          <div role="tablist" class="-mb-px flex flex-wrap gap-1 pt-3" data-tabs>
+            {
+              tabs.map((t, i) => (
+                <button
+                  role="tab"
+                  data-tab={t.id}
+                  class={`relative rounded-t-lg px-3 py-2 text-sm transition ${
+                    i === 0
+                      ? "text-ink-50"
+                      : "text-ink-400 hover:text-ink-200"
+                  }`}
+                >
+                  {t.label}
+                  {i === 0 && <span class="absolute inset-x-2 -bottom-px h-px bg-gradient-to-r from-transparent via-aurora-300 to-transparent" />}
+                </button>
+              ))
+            }
+          </div>
+          <button class="btn btn-ghost !py-1 !text-xs" data-copy="#api-code-active">
+            <svg viewBox="0 0 16 16" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+              <rect x="4" y="4" width="9" height="9" rx="1.5" />
+              <path d="M2 11V3a1 1 0 0 1 1-1h8" />
+            </svg>
+            <span data-label>Copy</span>
+          </button>
+        </div>
+        <div class="relative">
+          {
+            tabs.map((t, i) => (
+              <pre
+                id={`api-code-${t.id}`}
+                data-code={t.id}
+                class={`m-0 max-h-[460px] overflow-auto p-5 text-[13px] leading-[1.6] text-ink-100 ${i === 0 ? "" : "hidden"}`}
+                style="font-family: theme('fontFamily.mono'); font-variant-ligatures: none;"
+              >
+                <code set:html={t.code} />
+              </pre>
+            ))
+          }
+          <!-- Active sink used by copy -->
+          <pre id="api-code-active" class="hidden" aria-hidden="true"></pre>
+        </div>
+      </div>
+
+      <p class="mt-5 text-center text-sm text-ink-400">
+        See <a class="text-ink-200 underline-offset-4 hover:underline" href="https://github.com/sachncs/driftflow/tree/main/docs/API_REFERENCE.md" target="_blank" rel="noreferrer">docs/API_REFERENCE.md</a>
+        for the full public surface.
+      </p>
+    </div>
+  </div>
+</section>
+
+<script>
+  // Tab switching
+  const root = document.querySelector("[data-tabs]");
+  if (root) {
+    const buttons = root.querySelectorAll<HTMLButtonElement>("button[data-tab]");
+    const blocks = document.querySelectorAll<HTMLPreElement>("[data-code]");
+    buttons.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const id = btn.getAttribute("data-tab");
+        buttons.forEach((b) => {
+          const isActive = b === btn;
+          b.classList.toggle("text-ink-50", isActive);
+          b.classList.toggle("text-ink-400", !isActive);
+          const underline = b.querySelector("span.absolute");
+          if (underline) underline.style.opacity = isActive ? "1" : "0";
+        });
+        blocks.forEach((b) => {
+          b.classList.toggle("hidden", b.getAttribute("data-code") !== id);
+        });
+        // Sync the copy-button target to the active block
+        const active = document.querySelector<HTMLElement>(`#api-code-${id}`);
+        const sink = document.querySelector<HTMLElement>("#api-code-active");
+        if (active && sink) sink.textContent = active.innerText;
+      });
+    });
+    // initial sink content
+    const initial = document.querySelector<HTMLElement>("#api-code-sample");
+    const sink = document.querySelector<HTMLElement>("#api-code-active");
+    if (initial && sink) sink.textContent = initial.innerText;
+  }
+</script>

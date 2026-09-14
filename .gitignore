@@ -119,7 +119,7 @@ venv.bak/
 .ropeproject
 
 # mkdocs documentation
-/site
+# (the project site folder is now under ./site and must be tracked)
 
 # mypy
 .mypy_cache/
@@ -149,3 +149,16 @@ Thumbs.db
 # Project-specific
 /tmp/paper.html
 *.html
+
+# Astro / site build artifacts
+node_modules/
+site/dist/
+site/.astro/
+site/node_modules/
+.DS_Store
+*.log
+.cache
+.env
+.env.production
+.vercel
+.netlify

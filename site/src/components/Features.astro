@@ -1,0 +1,123 @@
+---
+const features = [
+  {
+    title: "Drift Variation Score",
+    eyebrow: "DVS · Eq. 13–15",
+    body:
+      "Composable Python primitives compute the per-modality variation of your drift. Plug them into any graph-diffusion pipeline and decide exactly where adaptation should happen.",
+    icon: "compass",
+  },
+  {
+    title: "Two production solvers",
+    eyebrow: "Algorithm 2 & 3",
+    body:
+      "First-order Euler-Maruyama for speed, second-order Heun for accuracy — both with the shared diffusion noise scale g(t) · √dt. Register your own via the SOLVERS extension point.",
+    icon: "solver",
+  },
+  {
+    title: "Curated hyperparameter set",
+    eyebrow: "Tables 6 & 7",
+    body:
+      "Common and dataset-specific settings are validated, named, and ready to import. CommonConfig + get_dataset_config() reproduce paper defaults without hand-tuning.",
+    icon: "tuning",
+  },
+  {
+    title: "Active-range gating",
+    eyebrow: "Localized control",
+    body:
+      "Adapt only where it pays off — e.g. [0, 0.2] ∪ [0.95, 1.0] for GDSS/QM9. Outside the range, the sampler falls back to dt_base for predictable cost.",
+    icon: "gate",
+  },
+  {
+    title: "Pure Python, zero deps",
+    eyebrow: "Embeddable",
+    body:
+      "No NumPy, no PyTorch. Every numerical primitive operates on nested list[float] containers so driftflow runs anywhere — educational tools, edge inference, lightweight servers.",
+    icon: "package",
+  },
+  {
+    title: "Deterministic by default",
+    eyebrow: "Reproducibility",
+    body:
+      "A single seed makes the entire trajectory bit-for-bit reproducible, including the per-step history returned by sample(). Fail-fast errors surface before any work is done.",
+    icon: "seed",
+  },
+];
+---
+
+<section id="features" class="relative py-24 sm:py-32">
+  <div class="absolute inset-x-0 top-0 -z-10 h-72 bg-grid-fade opacity-50"></div>
+  <div class="container-x">
+    <div class="mx-auto max-w-2xl text-center">
+      <p class="eyebrow justify-center">
+        <span class="h-px w-6 bg-aurora-300"></span>
+        Features
+        <span class="h-px w-6 bg-aurora-300"></span>
+      </p>
+      <h2 class="display mt-5 text-display-lg text-ink-50">
+        Engineered for serious diffusion work.
+      </h2>
+      <p class="lead mx-auto mt-5 max-w-xl">
+        A small, opinionated surface area built on six primitives. Each one earns
+        its keep — no boilerplate, no half-features.
+      </p>
+    </div>
+
+    <div class="mt-16 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {
+        features.map((f, i) => (
+          <article
+            class="surface group relative flex flex-col gap-4 rounded-2xl p-6 transition duration-500 ease-out-expo hover:-translate-y-0.5 hover:bg-white/[0.04]"
+           
+           -delay={Math.min(i + 1, 6)}
+          >
+            <div class="flex items-center justify-between">
+              <span class="eyebrow !text-ink-400">{f.eyebrow}</span>
+              <span class="grid h-9 w-9 place-items-center rounded-xl border border-white/10 bg-white/[0.03] text-aurora-300 transition group-hover:border-aurora-400/40 group-hover:text-aurora-200">
+                {f.icon === "compass" && (
+                  <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M15.5 8.5l-2 5-5 2 2-5 5-2z" />
+                  </svg>
+                )}
+                {f.icon === "solver" && (
+                  <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                    <path d="M4 7l8 5 8-5M4 12l8 5 8-5M4 17l8 5 8-5" />
+                  </svg>
+                )}
+                {f.icon === "tuning" && (
+                  <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                    <path d="M4 6h10M4 12h6M4 18h13" />
+                    <circle cx="17" cy="6" r="2" />
+                    <circle cx="13" cy="12" r="2" />
+                    <circle cx="20" cy="18" r="2" />
+                  </svg>
+                )}
+                {f.icon === "gate" && (
+                  <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                    <path d="M4 5h16M4 12h10M4 19h16" />
+                  </svg>
+                )}
+                {f.icon === "package" && (
+                  <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                    <path d="M3 7l9-4 9 4-9 4-9-4z" />
+                    <path d="M3 7v10l9 4 9-4V7" />
+                  </svg>
+                )}
+                {f.icon === "seed" && (
+                  <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M12 3a9 9 0 0 1 9 9" />
+                    <path d="M12 12l5-5" />
+                  </svg>
+                )}
+              </span>
+            </div>
+            <h3 class="font-display text-xl font-semibold tracking-tight text-ink-50">{f.title}</h3>
+            <p class="text-sm leading-relaxed text-ink-300">{f.body}</p>
+          </article>
+        ))
+      }
+    </div>
+  </div>
+</section>

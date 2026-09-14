@@ -1,0 +1,139 @@
+---
+const cols = [
+  {
+    title: "Library",
+    links: [
+      { href: "/#features", label: "Features" },
+      { href: "/#algorithms", label: "Algorithms" },
+      { href: "/#api", label: "API" },
+      { href: "/#architecture", label: "Architecture" },
+    ],
+  },
+  {
+    title: "Resources",
+    links: [
+      { href: "https://github.com/sachncs/driftflow", label: "GitHub" },
+      { href: "https://github.com/sachncs/driftflow/tree/main/docs", label: "Documentation" },
+      { href: "https://github.com/sachncs/driftflow/blob/main/CHANGELOG.md", label: "Changelog" },
+      { href: "https://arxiv.org/abs/2605.00250", label: "Paper" },
+    ],
+  },
+  {
+    title: "Community",
+    links: [
+      { href: "https://github.com/sachncs/driftflow/issues", label: "Issues" },
+      { href: "https://github.com/sachncs/driftflow/blob/main/CONTRIBUTING.md", label: "Contributing" },
+      { href: "https://github.com/sachncs/driftflow/blob/main/CODE_OF_CONDUCT.md", label: "Code of Conduct" },
+      { href: "https://github.com/sachncs/driftflow/blob/main/SECURITY.md", label: "Security" },
+    ],
+  },
+];
+
+const year = new Date().getFullYear();
+---
+
+<footer class="relative mt-10 border-t border-white/5 py-16">
+  <div class="container-x">
+    <div class="grid grid-cols-1 gap-10 md:grid-cols-12">
+      <div class="md:col-span-6">
+        <a href="/" class="flex items-center gap-2.5">
+          <span class="grid h-8 w-8 place-items-center rounded-lg surface">
+            <svg viewBox="0 0 24 24" class="h-4 w-4" aria-hidden="true">
+              <defs>
+                <linearGradient id="ft-d" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stop-color="#B8C5FF" />
+                  <stop offset="100%" stop-color="#6C82FF" />
+                </linearGradient>
+              </defs>
+              <path
+                d="M5 4 L5 20 M5 4 L13 4 C18 4 18 12 13 12 L5 12"
+                fill="none"
+                stroke="url(#ft-d)"
+                stroke-width="2.2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+              <circle cx="18" cy="18" r="1.5" fill="#B8C5FF" />
+            </svg>
+          </span>
+          <span class="font-display text-[15px] font-semibold tracking-tight text-ink-50">
+            driftflow
+          </span>
+        </a>
+        <p class="mt-4 max-w-sm text-sm text-ink-300">
+          Information-Geometric Adaptive Sampling for Graph Diffusion. A
+          pure-Python reproduction of arXiv:2605.00250.
+        </p>
+        <div class="mt-6 flex items-center gap-3">
+          <a
+            href="https://github.com/sachncs/driftflow"
+            target="_blank"
+            rel="noreferrer"
+            aria-label="GitHub"
+            class="grid h-9 w-9 place-items-center rounded-lg border border-white/10 bg-white/[0.03] text-ink-200 transition hover:bg-white/[0.06] hover:text-white"
+          >
+            <svg viewBox="0 0 16 16" class="h-4 w-4" fill="currentColor" aria-hidden="true">
+              <path d="M8 0C3.58 0 0 3.58 0 8a8 8 0 0 0 5.47 7.59c.4.07.55-.17.55-.38v-.92c-2.23.48-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.06-.49.06-.49.8.06 1.23.83 1.23.83.72 1.23 1.88.88 2.34.67.07-.52.28-.88.5-1.08-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.7 7.7 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.74-3.65 3.94.29.25.54.74.54 1.49v2.21c0 .21.15.46.55.38A8 8 0 0 0 16 8c0-4.42-3.58-8-8-8Z" />
+            </svg>
+          </a>
+          <a
+            href="https://arxiv.org/abs/2605.00250"
+            target="_blank"
+            rel="noreferrer"
+            aria-label="arXiv"
+            class="grid h-9 w-9 place-items-center rounded-lg border border-white/10 bg-white/[0.03] text-ink-200 transition hover:bg-white/[0.06] hover:text-white"
+          >
+            <svg viewBox="0 0 16 16" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+              <path d="M3 3h10v10H3z" />
+              <path d="M3 7h10M7 3v10" />
+            </svg>
+          </a>
+          <a
+            href="mailto:sachncs@gmail.com"
+            aria-label="Email"
+            class="grid h-9 w-9 place-items-center rounded-lg border border-white/10 bg-white/[0.03] text-ink-200 transition hover:bg-white/[0.06] hover:text-white"
+          >
+            <svg viewBox="0 0 16 16" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+              <rect x="2" y="3" width="12" height="10" rx="1.5" />
+              <path d="M2 4l6 5 6-5" />
+            </svg>
+          </a>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-10 md:col-span-6 md:grid-cols-3">
+        {
+          cols.map((c) => (
+            <div>
+              <h4 class="text-[11px] font-semibold uppercase tracking-[0.16em] text-ink-400">
+                {c.title}
+              </h4>
+              <ul class="mt-4 space-y-2.5">
+                {c.links.map((l) => (
+                  <li>
+                    <a
+                      href={l.href}
+                      class="text-sm text-ink-200 transition hover:text-white"
+                      target={l.href.startsWith("http") ? "_blank" : undefined}
+                      rel={l.href.startsWith("http") ? "noreferrer" : undefined}
+                    >
+                      {l.label}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))
+        }
+      </div>
+    </div>
+
+    <div class="mt-12 flex flex-col items-start justify-between gap-4 border-t border-white/5 pt-8 text-xs text-ink-400 sm:flex-row sm:items-center">
+      <p>© {year} Sachin. Released under the MIT License.</p>
+      <p class="flex items-center gap-2">
+        <span class="pill-dot"></span>
+        Built with Astro · deployed on GitHub Pages
+      </p>
+    </div>
+  </div>
+</footer>

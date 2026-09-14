@@ -1,0 +1,132 @@
+---
+import "~/styles/global.css";
+
+export interface Props {
+  title?: string;
+  description?: string;
+  ogImage?: string;
+}
+
+const {
+  title = "driftflow — Information-Geometric Adaptive Sampling for Graph Diffusion",
+  description = "A pure-Python implementation of the Drift Variation Score (DVS) adaptive sampler for graph diffusion. Training-free, zero-dependency, reproducible.",
+  ogImage = "/og-image.svg",
+} = Astro.props;
+
+const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+const siteName = "driftflow";
+const faviconHref = `${base}/favicon.svg`;
+const ogImageHref = `${base}${ogImage.startsWith("/") ? ogImage : `/${ogImage}`}`;
+const canonical = new URL(Astro.url.pathname, Astro.site ?? "https://sachncs.github.io/driftflow");
+---
+
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#06060A" />
+    <meta name="generator" content={Astro.generator} />
+    <meta name="color-scheme" content="dark" />
+
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical.toString()} />
+
+    <!-- Favicons -->
+    <link rel="icon" type="image/svg+xml" href={faviconHref} />
+    <link rel="alternate icon" href={faviconHref} />
+    <meta name="theme-color" content="#06060A" />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content={siteName} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:image" content={ogImageHref} />
+    <meta property="og:url" content={canonical.toString()} />
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImageHref} />
+
+    <!-- Fonts: preconnect then load. Inter for body, Inter Tight for display, JetBrains Mono for code. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
+    />
+
+    <!-- Structured data: SoftwareSourceCode -->
+    <script type="application/ld+json" set:html={JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "SoftwareSourceCode",
+      name: "driftflow",
+      description: description,
+      url: canonical.toString(),
+      programmingLanguage: "Python",
+      license: "https://opensource.org/licenses/MIT",
+      codeRepository: "https://github.com/sachncs/driftflow",
+      author: {
+        "@type": "Person",
+        name: "Sachin",
+        email: "sachncs@gmail.com",
+      },
+    })} />
+  </head>
+  <body class="relative min-h-screen overflow-x-hidden">
+    <div class="pointer-events-none fixed inset-x-0 top-0 -z-10 h-[720px] bg-grid-fade"></div>
+    <slot />
+
+    <script>
+      // Nav blur on scroll
+      const nav = document.querySelector<HTMLElement>("[data-nav]");
+      if (nav) {
+        const onScroll = () => {
+          if (window.scrollY > 8) nav.classList.add("is-scrolled");
+          else nav.classList.remove("is-scrolled");
+        };
+        onScroll();
+        window.addEventListener("scroll", onScroll, { passive: true });
+      }
+
+      // Copy-code buttons
+      document.querySelectorAll<HTMLButtonElement>("[data-copy]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const target = btn.getAttribute("data-copy");
+          if (!target) return;
+          const node = document.querySelector<HTMLElement>(target);
+          if (!node) return;
+          const text = node.innerText.replace(/^\s+|\s+$/g, "");
+          try {
+            await navigator.clipboard.writeText(text);
+            const label = btn.querySelector<HTMLElement>("[data-label]");
+            if (label) {
+              const original = label.textContent;
+              label.textContent = "Copied";
+              setTimeout(() => (label.textContent = original), 1400);
+            }
+          } catch {
+            /* no-op */
+          }
+        });
+      });
+    </script>
+
+    <style>
+      [data-nav] {
+        transition:
+          background-color 0.3s ease,
+          border-color 0.3s ease,
+          backdrop-filter 0.3s ease;
+      }
+      [data-nav].is-scrolled {
+        background-color: rgba(6, 6, 10, 0.72);
+        border-bottom-color: rgba(255, 255, 255, 0.06);
+      }
+    </style>
+  </body>
+</html>

@@ -1,0 +1,29 @@
+---
+const items = [
+  "Pure Python 3.10+",
+  "Zero runtime deps",
+  "100% test coverage",
+  "Deterministic · seeded",
+  "MIT licensed",
+  "Type-hinted (PEP 561)",
+  "mypy --strict clean",
+  "Algorithm 1 · 2 · 3",
+];
+---
+
+<section class="relative border-y border-white/5 py-8">
+  <div class="marquee-mask overflow-hidden">
+    <div class="flex w-max gap-3 animate-marquee">
+      {
+        [...items, ...items, ...items].map((label) => (
+          <span class="pill whitespace-nowrap px-4 py-1.5 text-sm">
+            <svg viewBox="0 0 8 8" class="h-1.5 w-1.5 text-aurora-300" fill="currentColor" aria-hidden="true">
+              <circle cx="4" cy="4" r="3"></circle>
+            </svg>
+            {label}
+          </span>
+        ))
+      }
+    </div>
+  </div>
+</section>

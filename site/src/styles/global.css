@@ -1,0 +1,247 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── Root ─────────────────────────────────────────────────────────────────── */
+:root {
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-soft: cubic-bezier(0.4, 0, 0.2, 1);
+  color-scheme: dark;
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  @apply bg-ink-950 text-ink-100 font-sans antialiased;
+  background-image:
+    radial-gradient(1200px 600px at 50% -200px, rgba(108, 130, 255, 0.18), transparent 60%),
+    radial-gradient(800px 400px at 90% 10%, rgba(139, 92, 246, 0.10), transparent 60%),
+    radial-gradient(900px 500px at 5% 30%, rgba(56, 189, 248, 0.06), transparent 60%);
+  background-attachment: fixed;
+  background-repeat: no-repeat;
+}
+
+::selection {
+  background: rgba(143, 161, 255, 0.35);
+  color: #ffffff;
+}
+
+/* ─── Typography ───────────────────────────────────────────────────────────── */
+.display {
+  font-family: theme("fontFamily.display");
+  font-feature-settings: "ss01", "cv11", "ss02";
+  letter-spacing: -0.035em;
+}
+
+.eyebrow {
+  @apply inline-flex items-center gap-2 text-[0.72rem] font-medium uppercase tracking-[0.18em] text-ink-300;
+}
+
+.lead {
+  @apply text-lg leading-[1.55] text-ink-200 sm:text-xl;
+}
+
+.muted {
+  @apply text-ink-300;
+}
+
+/* ─── Surfaces ─────────────────────────────────────────────────────────────── */
+.surface {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.0)),
+    rgba(13, 13, 18, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+}
+
+.surface-strong {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.01)),
+    rgba(18, 18, 24, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.divider {
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* ─── Buttons ──────────────────────────────────────────────────────────────── */
+.btn {
+  @apply inline-flex items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-medium transition duration-300 ease-out-expo;
+}
+
+.btn-primary {
+  background: linear-gradient(180deg, #ffffff 0%, #e6e6f0 100%);
+  color: #0a0a0f;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    0 1px 1px rgba(0, 0, 0, 0.4),
+    0 18px 40px -12px rgba(108, 130, 255, 0.55);
+}
+
+.btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    0 1px 1px rgba(0, 0, 0, 0.4),
+    0 22px 48px -14px rgba(143, 161, 255, 0.7);
+}
+
+.btn-ghost {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #ededef;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.btn-ghost:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* ─── Pills ────────────────────────────────────────────────────────────────── */
+.pill {
+  @apply inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-ink-200;
+}
+
+.pill-dot {
+  @apply h-1.5 w-1.5 rounded-full bg-emerald-400;
+  box-shadow: 0 0 10px rgba(52, 211, 153, 0.7);
+}
+
+/* ─── Reveal animations ────────────────────────────────────────────────────── */
+/*
+ * Elements are visible by default (works without JS / in headless captures /
+ * for prefers-reduced-motion users). When JS is available, it can add the
+ * `.is-entering` class to play a one-time entrance animation.
+ */
+@keyframes drift-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+[data-reveal] {
+  opacity: 1;
+}
+
+[data-reveal].is-entering {
+  animation: drift-reveal 0.7s var(--ease-out-expo) both;
+}
+
+/* ─── Decorative grid ──────────────────────────────────────────────────────── */
+.dot-grid {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+  background-size: 22px 22px;
+  background-position: 0 0;
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 30%, black, transparent 80%);
+}
+
+.line-grid {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  background-size: 64px 64px;
+  background-position: center;
+  mask-image: radial-gradient(ellipse 70% 70% at 50% 50%, black 30%, transparent 75%);
+}
+
+/* ─── Aurora gradient text ─────────────────────────────────────────────────── */
+.aurora-text {
+  background: linear-gradient(
+    120deg,
+    #b8c5ff 0%,
+    #8b5cf6 35%,
+    #6c82ff 65%,
+    #dbe5ff 100%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shimmer 8s ease-in-out infinite;
+}
+
+/* ─── Code block ───────────────────────────────────────────────────────────── */
+.code-shell {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0)),
+    rgba(8, 9, 14, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.code-shell pre {
+  @apply m-0 overflow-x-auto p-4 text-[12.5px] leading-[1.6] text-ink-100 sm:p-5 sm:text-[13px];
+  font-family: theme("fontFamily.mono");
+  font-variant-ligatures: none;
+}
+
+@media (max-width: 480px) {
+  .code-shell pre {
+    font-size: 11.5px;
+    line-height: 1.55;
+  }
+}
+
+.code-shell pre code .tok-kw { color: #c4b5fd; }
+.code-shell pre code .tok-fn { color: #93c5fd; }
+.code-shell pre code .tok-str { color: #fcd34d; }
+.code-shell pre code .tok-num { color: #f0abfc; }
+.code-shell pre code .tok-com { color: #6b7280; font-style: italic; }
+.code-shell pre code .tok-op { color: #9ca3af; }
+.code-shell pre code .tok-id { color: #e5e7eb; }
+
+.code-tab {
+  @apply inline-flex items-center gap-2 rounded-md border border-white/10 bg-white/[0.03] px-2.5 py-1 text-xs text-ink-300;
+}
+
+/* ─── Marquee fade edges ───────────────────────────────────────────────────── */
+.marquee-mask {
+  mask-image: linear-gradient(90deg, transparent, black 12%, black 88%, transparent);
+  -webkit-mask-image: linear-gradient(90deg, transparent, black 12%, black 88%, transparent);
+}
+
+/* ─── Scrollbars (subtle) ──────────────────────────────────────────────────── */
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+}
+*::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.16); }
+
+/* ─── Reduced motion ───────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* ─── Misc ─────────────────────────────────────────────────────────────────── */
+.container-x {
+  @apply mx-auto w-full max-w-[1180px] px-6 sm:px-8;
+}
+
+.kbd {
+  @apply inline-flex items-center justify-center rounded-md border border-white/10 bg-white/[0.04] px-1.5 py-0.5 font-mono text-[10px] text-ink-300;
+}
+
+/* Smooth in-page anchors */
+[id] { scroll-margin-top: 96px; }

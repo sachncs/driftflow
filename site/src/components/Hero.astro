@@ -1,0 +1,163 @@
+---
+import Logo from "~/components/ui/Logo.astro";
+
+const heroCode = `<span class="tok-com"># driftflow — adaptive SDE sampling for graph diffusion</span>
+<span class="tok-kw">from</span> driftflow <span class="tok-kw">import</span> (
+    CommonConfig, DVSSampler, GruMApproximation,
+    LinearSchedule, get_dataset_config, make_drift_function,
+)
+
+approx    = GruMApproximation(num_nodes=<span class="tok-num">9</span>, feature_dim=<span class="tok-num">4</span>, seed=<span class="tok-num">42</span>)
+drift     = make_drift_function(approx)
+common    = CommonConfig()
+dataset   = get_dataset_config(<span class="tok-str">"GruM"</span>, <span class="tok-str">"QM9"</span>)
+
+sampler = DVSSampler(
+    drift_function  = drift,
+    noise_schedule  = LinearSchedule(sigma_min=<span class="tok-num">0.01</span>, sigma_max=<span class="tok-num">0.5</span>),
+    common_config   = common,
+    dataset_config  = dataset,
+    solver          = <span class="tok-str">"Heun"</span>,
+    seed            = <span class="tok-num">42</span>,
+)
+
+features_t, adjacency_t, info = sampler.sample(
+    initial_features = features_0,
+    initial_adjacency = adjacency_0,
+    terminal_time    = <span class="tok-num">1.0</span>,
+)
+
+<span class="tok-fn">print</span>(f<span class="tok-str">"steps=&#123;info['total_steps'][0]&#125;  time=&#123;info['final_time'][0]:.4f&#125;"</span>)`;
+---
+
+<section class="relative pt-28 pb-20 sm:pt-36 sm:pb-28">
+  <div class="absolute inset-0 -z-10 dot-grid opacity-60"></div>
+
+  <div class="container-x">
+    <div class="mx-auto max-w-3xl text-center">
+      <a
+        href="https://arxiv.org/abs/2605.00250"
+        target="_blank"
+        rel="noreferrer"
+        class="eyebrow group inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 hover:bg-white/[0.08]"
+      >
+        <span class="pill-dot"></span>
+        <span>Now reproducing arXiv:2605.00250</span>
+        <svg viewBox="0 0 16 16" class="h-3 w-3 text-ink-300 transition group-hover:translate-x-0.5" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+          <path d="M3 8h10M9 4l4 4-4 4" stroke-linecap="round" stroke-linejoin="round"></path>
+        </svg>
+      </a>
+    </div>
+
+    <h1
+      class="display mx-auto mt-7 max-w-4xl text-center text-display-xl text-ink-50"
+     
+     
+    >
+      Adaptive SDE sampling,<br />
+      <span class="aurora-text">guided by geometry.</span>
+    </h1>
+
+    <p
+      class="lead mx-auto mt-7 max-w-2xl text-center"
+     
+     
+    >
+      <strong class="font-semibold text-ink-100">driftflow</strong> is a pure-Python
+      implementation of the <span class="text-ink-100">Drift Variation Score</span> — a
+      training-free, plug-in sampler that adapts its timestep to the local
+      Fisher-Rao curvature of the transition manifold. Wrap any graph-diffusion
+      drift. Get sharper samples, faster.
+    </p>
+
+    <div
+      class="mt-10 flex flex-wrap items-center justify-center gap-3"
+     
+     
+    >
+      <a href="#install" class="btn btn-primary">
+        <svg viewBox="0 0 16 16" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path d="M8 1v9M4 7l4 3 4-3M2 14h12" stroke-linecap="round" stroke-linejoin="round"></path>
+        </svg>
+        pip install driftflow
+      </a>
+      <a
+        href="https://github.com/sachncs/driftflow"
+        target="_blank"
+        rel="noreferrer"
+        class="btn btn-ghost"
+      >
+        <svg viewBox="0 0 16 16" class="h-4 w-4" fill="currentColor" aria-hidden="true">
+          <path
+            d="M8 0C3.58 0 0 3.58 0 8a8 8 0 0 0 5.47 7.59c.4.07.55-.17.55-.38v-.92c-2.23.48-2.7-1.07-2.7-1.07-.36-.92-.89-1.17-.89-1.17-.73-.5.06-.49.06-.49.8.06 1.23.83 1.23.83.72 1.23 1.88.88 2.34.67.07-.52.28-.88.5-1.08-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.7 7.7 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.74-3.65 3.94.29.25.54.74.54 1.49v2.21c0 .21.15.46.55.38A8 8 0 0 0 16 8c0-4.42-3.58-8-8-8Z"
+          ></path>
+        </svg>
+        View on GitHub
+      </a>
+      <a href="#citation" class="btn btn-ghost">
+        <svg viewBox="0 0 16 16" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+          <path d="M3 5h10M3 5v8h10V5M6 9h4" stroke-linecap="round" stroke-linejoin="round"></path>
+        </svg>
+        Cite the paper
+      </a>
+    </div>
+
+    <!-- Hero terminal mock -->
+    <div
+      class="relative mx-auto mt-16 max-w-5xl"
+     
+     
+    >
+      <div class="absolute -inset-x-10 -top-6 -z-10 h-64 rounded-[40px] bg-grid-fade blur-2xl"></div>
+      <div class="code-shell">
+        <div class="flex items-center justify-between border-b border-white/5 bg-white/[0.02] px-4 py-3">
+          <div class="flex items-center gap-1.5">
+            <span class="h-2.5 w-2.5 rounded-full bg-white/10"></span>
+            <span class="h-2.5 w-2.5 rounded-full bg-white/10"></span>
+            <span class="h-2.5 w-2.5 rounded-full bg-white/10"></span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="code-tab">python</span>
+            <span class="code-tab">driftflow</span>
+          </div>
+          <button class="btn btn-ghost !py-1 !text-xs" data-copy="#hero-code">
+            <svg viewBox="0 0 16 16" class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+              <rect x="4" y="4" width="9" height="9" rx="1.5"></rect>
+              <path d="M2 11V3a1 1 0 0 1 1-1h8"></path>
+            </svg>
+            <span data-label>Copy</span>
+          </button>
+        </div>
+        <pre><code id="hero-code" set:html={heroCode} /></pre>
+      </div>
+
+      <!-- Floating badges -->
+      <div
+        class="pointer-events-none absolute -left-10 -top-10 hidden animate-drift rounded-2xl border border-white/10 bg-black/70 px-3 py-2 text-xs text-ink-200 shadow-soft backdrop-blur sm:block"
+       
+       
+      >
+        <div class="flex items-center gap-2">
+          <span class="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.7)]"></span>
+          <span class="font-mono">dt = 2.34e-3</span>
+        </div>
+        <div class="mt-1 text-ink-400">t = 0.62 · DVS active</div>
+      </div>
+      <div
+        class="pointer-events-none absolute -right-8 -bottom-8 hidden animate-drift rounded-2xl border border-white/10 bg-black/70 px-3 py-2 text-xs text-ink-200 shadow-soft backdrop-blur sm:block"
+        style="animation-delay: -3s"
+       
+       
+      >
+        <div class="flex items-center gap-2">
+          <svg viewBox="0 0 16 16" class="h-3 w-3 text-aurora-300" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+            <circle cx="8" cy="8" r="6"></circle>
+            <path d="M5 8l2 2 4-4"></path>
+          </svg>
+          <span class="font-mono">shape OK · 100% coverage</span>
+        </div>
+        <div class="mt-1 text-ink-400">Tests · 165 passing</div>
+      </div>
+    </div>
+  </div>
+</section>

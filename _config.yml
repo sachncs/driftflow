@@ -1,8 +1,0 @@
-title: "driftflow"
-description: "Information-Geometric Adaptive Sampling for Graph Diffusion"
-theme: minima
-logo: /assets/logo.svg
-show_downloads: false
-permalink: /:title/
-plugins:
-  - jekyll-feed
