@@ -165,7 +165,7 @@ The paper observes that DVS is most informative only during certain phases of th
 - `[(0.0, 0.2), (0.95, 1.0)]` — DVS active only in the union of these intervals.
 - `[]` (empty) — equivalent to `[(0.0, 1.0)]` (always active).
 
-**Implementation:** `DatasetConfig.is_active()` and `in_active_range()` (`utils.py`).
+**Implementation:** `DatasetConfig.is_active()` (`config.py`).
 
 ---
 
@@ -180,7 +180,7 @@ The Heun solver is a second-order method:
 
 2. **Corrector drift** at `t + dt`:
    ```
-   f^{(2)} = drift_function(X_hat, A_hat, t + dt)
+   f^{(2)} = DriftModel.evaluate((X_hat, A_hat), t + dt)
    ```
 
 3. **Corrector** (trapezoidal average):

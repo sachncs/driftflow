@@ -238,19 +238,6 @@ class HeunSolver(Solver):
         return average_drift_and_noise(state, drift, second_drift, timestep, noise)
 
 
-def apply_drift_and_noise(
-    state: GraphState,
-    drift: DriftState,
-    timestep: float,
-    noise_scale: float,
-    random_generator: Random,
-) -> GraphState:
-    """Apply one stochastic update with independently sampled entries."""
-    return advance_with_noise(
-        state, drift, timestep, draw_noise(state, noise_scale, random_generator)
-    )
-
-
 def draw_noise(
     state: GraphState,
     noise_scale: float,

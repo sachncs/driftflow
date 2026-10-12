@@ -1,5 +1,9 @@
 # Driftflow Production Readiness, API Redesign, and Site Rebuild
 
+> Status: implemented on branch `codex/driftflow-v2`; this document retains
+> the original audit findings for traceability and the remaining checklist as
+> release guidance.
+
 ## Summary
 
 Perform a clean-break v2 redesign of the Python package and Astro site.
@@ -37,7 +41,7 @@ The current implementation passes its existing checks—178 tests, 100% line cov
 - Logging is limited and there is no structured diagnostics or tracing hook.
 - Approximation models are educational placeholders but are easy to mistake for production denoisers.
 - Approximation model weights and fields remain mutable despite documentation implying stable/stateless behavior.
-- `make_drift_function()` returns an unstructured callable rather than a typed model adapter.
+- The retired `make_drift_function()` adapter was removed; models now implement the typed `DriftModel` contract directly.
 - The library has no benchmark/performance regression suite.
 - Tests heavily target line coverage and happy-path behavior, but not contract/property/fuzz/performance behavior.
 - No compatibility, migration, or versioned API policy exists.
@@ -50,7 +54,7 @@ The current implementation passes its existing checks—178 tests, 100% line cov
 - Frontend dependencies install with a fallback from `npm ci` to `npm install`, weakening lockfile reproducibility.
 - `npm audit` reports 24 vulnerabilities: 11 moderate, 12 high, and 1 critical.
 - The Astro dependency is directly affected by multiple security advisories.
-- `sharp`, Tailwind, Vite, and transitive packages also contain advisories.
+- The unused Tailwind/sharp dependency stack was removed; the remaining Astro dependency tree is audited in CI.
 - `pip-audit --strict` fails because the local editable package is not published/auditable.
 - No SBOM, dependency policy, or vulnerability exception policy exists.
 - No matrix verification exists for the actual supported Python versions in the local workflow.
@@ -92,7 +96,7 @@ The current implementation passes its existing checks—178 tests, 100% line cov
 - Remote Google Fonts create an unnecessary runtime dependency and possible layout shift.
 - Canonical/OG asset handling is not verified for the GitHub Pages base path.
 - GitHub Pages workflow does not include a production link check or 404/asset verification.
-- Color tokens are spread between Tailwind config, CSS literals, SVGs, and component classes.
+- Color tokens are centralized in the site stylesheet and SVG assets; the site no longer uses Tailwind.
 - The visual system lacks a clear semantic token layer for success, warning, error, interactive, and muted states.
 
 ## Implementation changes
@@ -226,7 +230,7 @@ Coverage remains required, but acceptance shifts from line coverage alone to beh
 
 - Replace `python` assumptions with `python3` or an activated environment.
 - Make CI fail on dependency vulnerabilities above an agreed severity.
-- Upgrade Astro, Vite, Tailwind, Sharp, and affected transitive packages.
+- Keep the static-site dependency tree minimal and audit it on every release.
 - Remove `npm install` fallback from CI.
 - Add lockfile integrity verification.
 - Separate development-only tooling from deploy dependencies.

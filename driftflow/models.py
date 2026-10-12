@@ -5,8 +5,8 @@ details or pretrained weights for the GruM and GDSS backbone models.
 The real networks are deep learning models (likely PyTorch / PyTorch
 Geometric) with graph attention, message passing, and time embedding
 layers.  Because we cannot ship a faithful reproduction, this module
-provides a stand-in that satisfies the ``drift_function(X, A, t)``
-interface contract used by :class:`~driftflow.sampler.DVSSampler`.
+provides a stand-in that satisfies the typed :class:`DriftModel` contract
+used by :class:`~driftflow.sampler.DVSSampler`.
 
 What we provide
 ---------------
@@ -18,9 +18,6 @@ What we provide
   larger hidden width (32), intended as a stand-in for GruM.
 * :class:`GDSSApproximation` -- :class:`SimpleGraphDenoiser` with a
   smaller hidden width (24), intended as a stand-in for GDSS.
-* :func:`make_drift_function` -- convenience wrapper that adapts any
-  :class:`SimpleGraphDenoiser` instance to the call signature expected
-  by :class:`~driftflow.sampler.DVSSampler`.
 
 What is **missing** (and explicitly marked as gaps)
 ---------------------------------------------------
@@ -32,9 +29,8 @@ What is **missing** (and explicitly marked as gaps)
   generic sinusoidal positional encoding).
 
 Users should replace these simplified models with the real trained
-networks once they become available; the only contract is that the
-replacement must accept ``(X, A, t)`` and return ``(f_X, f_A)`` with
-matching shapes.
+networks once they become available; the replacement must implement
+``DriftModel.evaluate`` and return a matching ``DriftState``.
 
 Assumptions
 -----------
@@ -60,7 +56,6 @@ References:
 
 import math
 import random
-from collections.abc import Callable
 
 from .contracts import DriftModel
 from .domain import DriftState, GraphState
@@ -226,7 +221,7 @@ class SimpleGraphDenoiser(DriftModel):
 
     Example:
         >>> model = SimpleGraphDenoiser(num_nodes=4, feature_dim=3, seed=0)
-        >>> drift_x, drift_a = model(
+        >>> drift_x, drift_a = model.predict(
         ...     [[0.1, 0.2, 0.3]] * 4,
         ...     [[0.5] * 4 for _ in range(4)],
         ...     time=0.5,
@@ -308,7 +303,7 @@ class SimpleGraphDenoiser(DriftModel):
         out = [v + b for v, b in zip(out, self.bias3, strict=False)]
         return out
 
-    def __call__(
+    def predict(
         self,
         features: list[list[float]],
         adjacency: list[list[float]],
@@ -362,7 +357,7 @@ class SimpleGraphDenoiser(DriftModel):
     def evaluate(self, state: GraphState, time: float) -> DriftState:
         """Evaluate the model against an immutable graph state."""
         features, adjacency = state.to_lists()
-        drift_features, drift_adjacency = self(features, adjacency, time)
+        drift_features, drift_adjacency = self.predict(features, adjacency, time)
         return DriftState.from_lists(drift_features, drift_adjacency)
 
 
@@ -429,42 +424,3 @@ class GDSSApproximation(SimpleGraphDenoiser):
             argument for it because the class is a placeholder.
         """
         super().__init__(num_nodes, feature_dim, hidden_dim=24, seed=seed)
-
-
-def make_drift_function(model: DriftModel) -> Callable:
-    """Wrap a :class:`SimpleGraphDenoiser` into the standard drift interface.
-
-    The wrapper closes over ``model`` so the returned callable can be
-    passed directly to :class:`~driftflow.sampler.DVSSampler`.  It exists
-    mainly as a documentation aid: it makes explicit that the
-    underlying object is a model and the wrapping callable is the
-    drift function.
-
-    Args:
-        model: A simplified denoising network (typically a
-            :class:`GruMApproximation` or :class:`GDSSApproximation`).
-
-    Returns:
-        A callable ``(X, A, t) -> (f_X, f_A)`` compatible with
-        :class:`~driftflow.sampler.DVSSampler`.  The wrapper simply
-        delegates to ``model.__call__``; it performs no additional
-        computation or state management.
-
-    Example:
-        >>> from driftflow import GruMApproximation, make_drift_function
-        >>> approx = GruMApproximation(num_nodes=3, feature_dim=2, seed=0)
-        >>> drift = make_drift_function(approx)
-        >>> drift([[0.0, 0.0]] * 3, [[0.0] * 3 for _ in range(3)], 0.0)[0]
-        [[...], [...], [...]]
-    """
-
-    def drift(
-        features: list[list[float]],
-        adjacency: list[list[float]],
-        time: float,
-    ) -> tuple[list[list[float]], list[list[float]]]:
-        state = GraphState.from_lists(features, adjacency)
-        result = model.evaluate(state, time)
-        return result.to_lists()
-
-    return drift

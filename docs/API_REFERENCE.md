@@ -119,5 +119,5 @@ available for simple post-processing.
 - `ShapeError`: incompatible state, drift, or matrix shapes.
 - `ScheduleError`: invalid schedule input or time.
 - `NumericalStabilityError`: non-finite or invalid numerical values.
-- `SolverContractError`: reserved for solver contract violations.
+- `SolverContractError`: a solver returned a value outside its contract.
 - `SamplingLimitError`: a sampling safety limit was exceeded.
