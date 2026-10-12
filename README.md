@@ -28,6 +28,17 @@ python3 -m pip install -e ".[dev]"
 Runtime code has no third-party dependencies. Development checks use pytest,
 coverage, Ruff, mypy, build, and pip-audit.
 
+Production inference uses the optional PyTorch adapter:
+
+```bash
+python3 -m pip install "driftflow[production]"
+```
+
+The repository does not ship trained GruM or GDSS weights. Use a versioned,
+validated TorchScript checkpoint with `TorchScriptDriftModel` and enable
+`production=True` on `DVSSampler`; the built-in approximation models are
+rejected in that mode.
+
 ## Quick start
 
 ```python
@@ -98,11 +109,14 @@ python3 examples/demo.py --model GruM --dataset QM9 \
 See [docs/USAGE.md](docs/USAGE.md), [docs/API_REFERENCE.md](docs/API_REFERENCE.md),
 and [docs/API_MIGRATION.md](docs/API_MIGRATION.md) for the full v2 surface.
 
-## Research status
+## Production boundary
 
-This repository is a research reproduction and educational implementation.
-Numerical results should be validated against the reference paper and the
-target graph-diffusion model before use in experiments or production systems.
+The sampler and validation contracts are suitable for integrating a validated
+production model, but this repository is not a trained model distribution.
+Numerical results must be validated against the reference paper, the target
+dataset, and the deployed checkpoint before production rollout. See
+[docs/PRODUCTION.md](docs/PRODUCTION.md) for the checkpoint contract,
+integrity checks, rollout gates, and operational checklist.
 
 ## License
 

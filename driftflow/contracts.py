@@ -10,6 +10,16 @@ from .domain import AdaptiveDecision, DriftState, GraphState
 class DriftModel(ABC):
     """Abstract graph drift model evaluated at a diffusion time."""
 
+    @property
+    def production_ready(self) -> bool:
+        """Return whether this model is approved for production mode.
+
+        Implementations backed by a validated, versioned checkpoint should
+        override this property. Educational or randomly initialised models
+        deliberately remain false so production callers fail closed.
+        """
+        return False
+
     @abstractmethod
     def evaluate(self, state: GraphState, time: float) -> DriftState:
         """Return the drift for ``state`` at ``time``."""

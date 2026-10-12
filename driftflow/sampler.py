@@ -2,6 +2,7 @@
 
 from math import isfinite, sqrt
 from random import Random
+from threading import RLock
 
 from .config import CommonConfig, DatasetConfig
 from .contracts import AdaptiveController, DriftModel, NoiseSchedule, Solver
@@ -355,6 +356,7 @@ class DVSSampler:
         controller: AdaptiveController,
         solver_registry: SolverRegistry | None = None,
         solver_name: str = "Euler-Maruyama",
+        production: bool = False,
     ) -> None:
         """Initialize a sampler with explicit polymorphic collaborators."""
         self.drift_model = drift_model
@@ -362,13 +364,29 @@ class DVSSampler:
         self.controller = controller
         self.solver_registry = solver_registry or SolverRegistry()
         self.solver = self.solver_registry.get(solver_name)
+        if production and not self.drift_model.production_ready:
+            raise ConfigurationError(
+                "production mode requires a validated production-ready drift model; "
+                "approximation models are restricted to research and smoke tests"
+            )
+        self.production = production
+        self._sampling_lock = RLock()
 
     def sample(
+        self, state: GraphState, terminal_time: float = 1.0, seed: int | None = None
+    ) -> SampleResult:
+        """Run one trajectory while serializing shared controller state."""
+        with self._sampling_lock:
+            return self._sample_unlocked(state, terminal_time, seed)
+
+    def _sample_unlocked(
         self, state: GraphState, terminal_time: float = 1.0, seed: int | None = None
     ) -> SampleResult:
         """Sample from ``state`` to ``terminal_time`` using a fresh RNG."""
         if not isfinite(terminal_time) or terminal_time < 0.0 or terminal_time > 1.0:
             raise ConfigurationError("terminal_time must be finite and within [0, 1]")
+        if seed is not None and (isinstance(seed, bool) or not isinstance(seed, int)):
+            raise ConfigurationError("seed must be an integer or None")
         self.controller.reset()
         current_state = state
         previous_drift: DriftState | None = None
@@ -389,9 +407,20 @@ class DVSSampler:
             decision = self.controller.choose_timestep(
                 drift, previous_drift, noise_scale, time, terminal_time
             )
+            metrics = (
+                decision.timestep,
+                decision.feature_variation,
+                decision.adjacency_variation,
+                decision.smoothed_feature_variation,
+                decision.smoothed_adjacency_variation,
+            )
+            if any(not isfinite(metric) for metric in metrics):
+                raise NumericalStabilityError("controller returned a non-finite decision")
             timestep = min(decision.timestep, terminal_time - time)
             if not isfinite(timestep) or timestep <= 0.0:
                 raise SamplingLimitError("controller returned a non-positive timestep")
+            next_time = min(terminal_time, time + timestep)
+            timestep = next_time - time
             next_state = self.solver.step(
                 current_state,
                 drift,
@@ -416,7 +445,7 @@ class DVSSampler:
             )
             previous_drift = drift
             current_state = next_state
-            time += timestep
+            time = next_time
 
         return SampleResult(
             current_state,

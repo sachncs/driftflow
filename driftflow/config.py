@@ -8,6 +8,8 @@ from .errors import ConfigurationError
 
 def validate_finite(value: float, name: str) -> float:
     """Validate and return a finite floating-point value."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ConfigurationError(f"{name} must be a real number, got {value!r}")
     if not isfinite(value):
         raise ConfigurationError(f"{name} must be finite, got {value!r}")
     return value
@@ -46,6 +48,10 @@ class CommonConfig:
             raise ConfigurationError("dt_min <= dt_base <= dt_max must hold with positive values")
         if self.eps_num <= 0.0 or self.eps_bound < 0.0:
             raise ConfigurationError("eps_num must be positive and eps_bound non-negative")
+        if self.eps_bound >= self.dt_min:
+            raise ConfigurationError("eps_bound must be smaller than dt_min")
+        if isinstance(self.max_steps, bool) or not isinstance(self.max_steps, int):
+            raise ConfigurationError("max_steps must be an integer")
         if self.max_steps <= 0:
             raise ConfigurationError("max_steps must be positive")
 

@@ -25,6 +25,7 @@ const sourceDocs: DocDefinition[] = [
   { slug: "developer-guide", title: "Developer guide", source: join(repoRoot, "docs/DEVELOPER_GUIDE.md") },
   { slug: "engineering-principles", title: "Engineering principles", source: join(repoRoot, "docs/ENGINEERING_PRINCIPLES.md") },
   { slug: "deployment", title: "Deployment", source: join(repoRoot, "docs/DEPLOYMENT.md") },
+  { slug: "production", title: "Production inference", source: join(repoRoot, "docs/PRODUCTION.md") },
   { slug: "extensions", title: "Extension guide", source: join(repoRoot, "docs/EXTENSIONS.md") },
   { slug: "api-migration", title: "v1 to v2 migration", source: join(repoRoot, "docs/API_MIGRATION.md") },
   { slug: "contributing", title: "Contributing", source: join(repoRoot, "CONTRIBUTING.md") },

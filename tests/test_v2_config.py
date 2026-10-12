@@ -15,6 +15,22 @@ def test_common_config_is_immutable_and_validated() -> None:
         CommonConfig(dt_min=0.2, dt_base=0.1)
 
 
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"alpha": "fast"}, "real number"),
+        ({"alpha": float("inf")}, "finite"),
+        ({"eps_bound": 0.001}, "smaller than dt_min"),
+        ({"max_steps": 1.5}, "integer"),
+    ],
+)
+def test_common_config_rejects_non_production_limits(
+    kwargs: dict[str, object], message: str
+) -> None:
+    with pytest.raises(ConfigurationError, match=message):
+        CommonConfig(**kwargs)  # type: ignore[arg-type]
+
+
 def test_dataset_ranges_are_immutable_tuples() -> None:
     config = DatasetConfig("model", "dataset", 1.0, active_range=[(0.0, 0.5)])
 

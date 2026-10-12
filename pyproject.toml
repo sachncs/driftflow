@@ -14,7 +14,7 @@ authors = [
 ]
 keywords = ["graph diffusion", "adaptive sampling", "DVS", "SDE", "stochastic differential equations", "generative models", "driftflow"]
 classifiers = [
-    "Development Status :: 5 - Production/Stable",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
@@ -37,12 +37,15 @@ dev = [
     "mypy",
     "ruff",
 ]
+production = [
+    "torch>=2.3",
+]
 
 [project.urls]
 Homepage = "https://github.com/sachncs/driftflow"
 Repository = "https://github.com/sachncs/driftflow"
-Documentation = "https://github.com/sachncs/driftflow/tree/main/docs"
-Changelog = "https://github.com/sachncs/driftflow/blob/main/CHANGELOG.md"
+Documentation = "https://sachncs.github.io/driftflow/docs/"
+Changelog = "https://github.com/sachncs/driftflow/blob/master/CHANGELOG.md"
 Issues = "https://github.com/sachncs/driftflow/issues"
 
 [tool.setuptools.packages.find]
@@ -82,4 +85,5 @@ convention = "google"
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["D103"]
+"tests/test_production_inference.py" = ["D102", "D106", "D107", "N801"]
 "examples/*" = ["D103", "E402"]

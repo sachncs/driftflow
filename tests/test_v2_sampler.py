@@ -163,3 +163,15 @@ def test_solver_return_type_is_checked() -> None:
 def test_sampling_limit_prevents_runaway_trajectories() -> None:
     with pytest.raises(SamplingLimitError, match="max_steps"):
         build_sampler(max_steps=1).sample(initial_state(), terminal_time=0.01, seed=1)
+
+
+def test_production_mode_rejects_educational_models() -> None:
+    controller = DvsAdaptiveController(CommonConfig(), get_dataset_config("GruM", "QM9"), 0.22)
+
+    with pytest.raises(ConfigurationError, match="production-ready"):
+        DVSSampler(
+            drift_model=build_sampler().drift_model,
+            noise_schedule=LinearSchedule(0.01, 0.1),
+            controller=controller,
+            production=True,
+        )

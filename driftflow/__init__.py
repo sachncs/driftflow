@@ -19,6 +19,7 @@ from .errors import (
     ShapeError,
     SolverContractError,
 )
+from .inference import TorchScriptDriftModel, sha256_file
 from .models import GDSSApproximation, GruMApproximation, SimpleGraphDenoiser
 from .sampler import (
     DvsAdaptiveController,
@@ -82,11 +83,13 @@ __all__ = [
     "SolverRegistry",
     "StepDiagnostics",
     "ThresholdGraphDecoder",
+    "TorchScriptDriftModel",
     "compute_drift_variation_score",
     "compute_timestep",
     "constant_schedule",
     "decode_adjacency",
     "get_dataset_config",
     "sigmoid_decode_adjacency",
+    "sha256_file",
     "update_ema",
 ]

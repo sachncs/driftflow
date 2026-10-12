@@ -13,6 +13,7 @@ This directory contains the maintained documentation for `driftflow`, a typed Py
 | [Developer guide](DEVELOPER_GUIDE.md) | How to run tests, lint, extend the codebase, and contribute |
 | [Engineering principles](ENGINEERING_PRINCIPLES.md) | The design and reliability rules behind the library |
 | [Deployment](DEPLOYMENT.md) | Production deployment, Docker, monitoring, and troubleshooting |
+| [Production inference](PRODUCTION.md) | Checkpoint loading, integrity, rollout gates, and operations |
 | [Extension guide](EXTENSIONS.md) | Optional enhancements and pluggable components |
 | [v1 to v2 migration](API_MIGRATION.md) | Upgrade notes for the current API |
 
