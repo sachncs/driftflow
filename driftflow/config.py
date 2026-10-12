@@ -92,6 +92,10 @@ class DatasetConfig:
 
     def is_active(self, time: float) -> bool:
         """Return whether DVS adaptation is enabled at ``time``."""
+        if isinstance(time, bool) or not isinstance(time, (int, float)) or not isfinite(time):
+            raise ConfigurationError("time must be finite")
+        if not 0.0 <= time <= 1.0:
+            raise ConfigurationError("time must be within [0, 1]")
         if not self.active_range:
             return True
         return any(start <= time <= end for start, end in self.active_range)

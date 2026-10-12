@@ -6,7 +6,7 @@
 - Explicit polymorphism for models, schedules, controllers, solvers, and decoders.
 - Fail-fast validation before numerical integration.
 - No mutable package-level solver registry.
-- Runtime dependency-free core with optional future numerical backends.
+- Runtime dependency-free core with an optional PyTorch inference adapter.
 
 ## Data flow
 
@@ -37,7 +37,8 @@ state; every `sample()` call creates a fresh generator from its seed.
 - `config.py`: validated immutable configuration.
 - `sampler.py`: DVS controller, solver implementations, registry, orchestration.
 - `schedule.py`: validated noise schedules.
-- `models.py`: educational MLP approximations and model adapters.
+- `models.py`: immutable educational MLP approximations.
+- `inference.py`: integrity-checked optional TorchScript model adapter.
 - `utils.py`: decoders and scalar helpers.
 - `errors.py`: explicit failure taxonomy.
 
@@ -48,5 +49,6 @@ state; every `sample()` call creates a fresh generator from its seed.
 - Drift and solver outputs preserve state shapes.
 - Numerical values crossing component boundaries are finite.
 - Timestep is positive, bounded, and cannot overshoot terminal time.
-- Sampling stops at the configured tolerance or safety step limit.
+- Sampling stops at the configured tolerance (reporting the exact terminal
+  time) or safety step limit.
 - Active-range boundaries are inclusive.

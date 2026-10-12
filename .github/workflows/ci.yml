@@ -46,7 +46,7 @@ jobs:
 
       - name: Lint with ruff
         run: |
-          python -m ruff check driftflow/ tests/ examples/
+          python -m ruff check driftflow/ tests/ examples/ scripts/
 
           python -m ruff format --check driftflow/ tests/ examples/ scripts/
       - name: Type check with mypy
@@ -67,7 +67,7 @@ jobs:
 
   build:
     runs-on: ubuntu-latest
-    needs: lint-and-test
+    needs: [lint-and-test, site-quality]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -94,6 +94,31 @@ jobs:
         run: |
           ls dist/
           tar -tzf dist/driftflow-*.tar.gz | grep -E "docs|examples|tests|scripts" > /dev/null
+
+  site-quality:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+
+      - name: Install locked site dependencies
+        working-directory: site
+        run: npm ci
+
+      - name: Audit site production dependencies
+        working-directory: site
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Build site
+        working-directory: site
+        run: npm run build
 
   production-inference:
     runs-on: ubuntu-latest

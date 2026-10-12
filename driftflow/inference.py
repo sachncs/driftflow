@@ -66,7 +66,9 @@ class TorchScriptDriftModel(DriftModel):
             raise ConfigurationError(f"model checkpoint does not exist: {path}")
         if num_nodes <= 0 or feature_dim <= 0:
             raise ConfigurationError("num_nodes and feature_dim must be positive")
-        if not re.fullmatch(r"[0-9a-fA-F]{64}", expected_sha256):
+        if not isinstance(expected_sha256, str) or not re.fullmatch(
+            r"[0-9a-fA-F]{64}", expected_sha256
+        ):
             raise ConfigurationError("expected_sha256 must be a 64-character hexadecimal digest")
         actual_sha256 = sha256_file(path)
         if actual_sha256.lower() != expected_sha256.lower():
@@ -84,7 +86,7 @@ class TorchScriptDriftModel(DriftModel):
             self._device = torch.device(device)
             self._module = torch.jit.load(str(path), map_location=self._device)
             self._module.eval()
-        except Exception as error:
+        except (OSError, RuntimeError, TypeError, ValueError) as error:
             raise ConfigurationError(f"unable to load TorchScript checkpoint {path}") from error
         self._torch = torch
         self.checkpoint = path
@@ -114,6 +116,8 @@ class TorchScriptDriftModel(DriftModel):
             metadata = json.loads(manifest_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as error:
             raise ConfigurationError(f"unable to read model manifest {manifest_path}") from error
+        if not isinstance(metadata, dict):
+            raise ConfigurationError("model manifest must contain a JSON object")
         required = {
             "checkpoint",
             "sha256",
@@ -125,6 +129,15 @@ class TorchScriptDriftModel(DriftModel):
         if not required.issubset(metadata):
             missing = sorted(required - set(metadata))
             raise ConfigurationError(f"model manifest is missing fields: {', '.join(missing)}")
+        if (
+            isinstance(metadata["num_nodes"], bool)
+            or not isinstance(metadata["num_nodes"], int)
+            or metadata["num_nodes"] <= 0
+            or isinstance(metadata["feature_dim"], bool)
+            or not isinstance(metadata["feature_dim"], int)
+            or metadata["feature_dim"] <= 0
+        ):
+            raise ConfigurationError("model manifest dimensions must be positive integers")
         if metadata["feature_order"] != [
             f"feature_{index}" for index in range(metadata["feature_dim"])
         ]:
@@ -133,6 +146,8 @@ class TorchScriptDriftModel(DriftModel):
             )
         if metadata["preprocessing"] != {"name": "identity", "version": "1"}:
             raise ConfigurationError("unsupported model preprocessing contract")
+        if not isinstance(metadata["checkpoint"], str) or not isinstance(metadata["sha256"], str):
+            raise ConfigurationError("model manifest checkpoint and sha256 must be strings")
         checkpoint_path = (
             Path(checkpoint)
             if checkpoint is not None
@@ -154,7 +169,11 @@ class TorchScriptDriftModel(DriftModel):
             )
         if len(state.features) != self.num_nodes or len(state.adjacency) != self.num_nodes:
             raise ShapeError(f"model expects {self.num_nodes} graph nodes")
-        if not isinstance(time, (int, float)) or not 0.0 <= float(time) <= 1.0:
+        if (
+            isinstance(time, bool)
+            or not isinstance(time, (int, float))
+            or not 0.0 <= float(time) <= 1.0
+        ):
             raise ConfigurationError(f"time must be within [0, 1], got {time!r}")
 
         features = self._torch.tensor(
@@ -169,7 +188,7 @@ class TorchScriptDriftModel(DriftModel):
         with self._lock, self._torch.inference_mode():
             try:
                 output = self._module(features, adjacency, diffusion_time)
-            except Exception as error:
+            except (OSError, RuntimeError, TypeError, ValueError) as error:
                 raise SolverContractError("production drift model inference failed") from error
 
         if not isinstance(output, (tuple, list)) or len(output) != 2:

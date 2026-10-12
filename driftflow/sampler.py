@@ -1,8 +1,10 @@
 """Polymorphic, validated adaptive SDE sampling."""
 
+from collections.abc import Mapping
 from math import isfinite, sqrt
 from random import Random
 from threading import RLock
+from types import MappingProxyType
 
 from .config import CommonConfig, DatasetConfig
 from .contracts import AdaptiveController, DriftModel, NoiseSchedule, Solver
@@ -44,10 +46,19 @@ def compute_drift_variation_score(
     eps_num: float,
 ) -> tuple[float, float]:
     """Compute feature and adjacency DVS values with a stable denominator."""
+    if not isinstance(current, DriftState) or not isinstance(previous, DriftState):
+        raise ShapeError("DVS inputs must be DriftState values")
+    if any(
+        isinstance(value, bool) or not isinstance(value, (int, float))
+        for value in (noise_scale, eps_num)
+    ):
+        raise ConfigurationError("noise scale and eps_num must be real numbers")
     if not isfinite(noise_scale) or noise_scale < 0.0:
         raise NumericalStabilityError(
             f"noise_scale must be finite and non-negative, got {noise_scale!r}"
         )
+    if not isfinite(eps_num) or eps_num <= 0.0:
+        raise ConfigurationError("eps_num must be finite and positive")
     denominator = noise_scale * noise_scale + eps_num
     return (
         squared_l2_difference(current.features, previous.features) / denominator,
@@ -63,6 +74,15 @@ def update_ema(
     alpha: float,
 ) -> tuple[float, float]:
     """Apply the configured exponential moving average."""
+    values = (current_feature, current_adjacency, previous_feature, previous_adjacency, alpha)
+    if any(isinstance(value, bool) or not isinstance(value, (int, float)) for value in values):
+        raise ConfigurationError("EMA inputs must be real numbers")
+    if not all(isfinite(value) for value in values):
+        raise NumericalStabilityError("EMA inputs must be finite")
+    if not 0.0 <= alpha <= 1.0:
+        raise ConfigurationError("alpha must be within [0, 1]")
+    if any(value < 0.0 for value in values[:4]):
+        raise NumericalStabilityError("EMA scores must be non-negative")
     return (
         alpha * current_feature + (1.0 - alpha) * previous_feature,
         alpha * current_adjacency + (1.0 - alpha) * previous_adjacency,
@@ -79,10 +99,19 @@ def compute_timestep(
     eps_num: float,
 ) -> float:
     """Compute and bound the power-law adaptive timestep."""
-    if not isfinite(smoothed_score) or smoothed_score < 0.0:
+    values = (smoothed_score, kappa_ref, dt_base, dt_min, dt_max, beta, eps_num)
+    if any(isinstance(value, bool) or not isinstance(value, (int, float)) for value in values):
+        raise ConfigurationError("timestep inputs must be real numbers")
+    if not all(isfinite(value) for value in values):
+        raise NumericalStabilityError("timestep inputs must be finite")
+    if smoothed_score < 0.0:
         raise NumericalStabilityError(
             f"smoothed_score must be finite and non-negative, got {smoothed_score!r}"
         )
+    if kappa_ref <= 0.0 or beta < 0.0 or eps_num <= 0.0:
+        raise ConfigurationError("kappa_ref, eps_num, and beta have invalid values")
+    if dt_min <= 0.0 or not dt_min <= dt_base <= dt_max:
+        raise ConfigurationError("dt_min <= dt_base <= dt_max must hold with positive values")
     raw_timestep = dt_base * float((kappa_ref / (smoothed_score + eps_num)) ** beta)
     return max(dt_min, min(dt_max, raw_timestep))
 
@@ -104,6 +133,8 @@ class DvsAdaptiveController(AdaptiveController):
 
     def __init__(self, common: CommonConfig, dataset: DatasetConfig, gamma: float) -> None:
         """Initialize a controller with validated configuration."""
+        if isinstance(gamma, bool) or not isinstance(gamma, (int, float)):
+            raise ConfigurationError("gamma must be a real number")
         if not isfinite(gamma) or gamma < 0.0:
             raise ConfigurationError("gamma must be finite and non-negative")
         self.common = common
@@ -136,6 +167,16 @@ class DvsAdaptiveController(AdaptiveController):
         terminal_time: float,
     ) -> AdaptiveDecision:
         """Choose a timestep and return all controller diagnostics."""
+        if isinstance(time, bool) or isinstance(terminal_time, bool):
+            raise ConfigurationError("time values must be real numbers")
+        if not all(
+            isinstance(value, (int, float)) and isfinite(value) for value in (time, terminal_time)
+        ):
+            raise ConfigurationError("time values must be finite")
+        if not 0.0 <= time <= terminal_time <= 1.0:
+            raise ConfigurationError(
+                "time and terminal_time must satisfy 0 <= time <= terminal_time <= 1"
+            )
         if previous_drift is None or not self.dataset.is_active(time):
             return AdaptiveDecision(
                 self.common.dt_base,
@@ -209,6 +250,8 @@ class EulerMaruyamaSolver(Solver):
     ) -> GraphState:
         """Advance both graph modalities by one Euler step."""
         del drift_model, time
+        validate_solver_parameters(timestep, noise_scale)
+        validate_drift_matches(state, drift)
         noise = draw_noise(state, noise_scale, random_generator)
         return advance_with_noise(state, drift, timestep, noise)
 
@@ -232,11 +275,26 @@ class HeunSolver(Solver):
         time: float,
     ) -> GraphState:
         """Advance the state using a shared-noise Heun correction."""
+        validate_solver_parameters(timestep, noise_scale)
+        validate_drift_matches(state, drift)
         noise = draw_noise(state, noise_scale, random_generator)
         predicted = advance_with_noise(state, drift, timestep, noise)
         second_drift = drift_model.evaluate(predicted, time + timestep)
         validate_drift_matches(predicted, second_drift)
         return average_drift_and_noise(state, drift, second_drift, timestep, noise)
+
+
+def validate_solver_parameters(timestep: float, noise_scale: float) -> None:
+    """Validate numerical parameters before a solver consumes them."""
+    if any(
+        isinstance(value, bool) or not isinstance(value, (int, float))
+        for value in (timestep, noise_scale)
+    ):
+        raise ConfigurationError("solver timestep and noise scale must be real numbers")
+    if not all(isfinite(value) for value in (timestep, noise_scale)):
+        raise NumericalStabilityError("solver timestep and noise scale must be finite")
+    if timestep <= 0.0 or noise_scale < 0.0:
+        raise NumericalStabilityError("solver timestep must be positive and noise non-negative")
 
 
 def draw_noise(
@@ -245,6 +303,7 @@ def draw_noise(
     random_generator: Random,
 ) -> tuple[tuple[tuple[float, ...], ...], tuple[tuple[float, ...], ...]]:
     """Draw one noise matrix per graph modality."""
+    validate_solver_parameters(1.0, noise_scale)
     return (
         tuple(
             tuple(noise_scale * random_generator.gauss(0.0, 1.0) for _ in row)
@@ -326,23 +385,32 @@ class SolverRegistry:
 
     def __init__(self, solvers: tuple[Solver, ...] | None = None) -> None:
         """Create a registry with fresh Euler and Heun defaults."""
-        self.solvers: dict[str, Solver] = {}
-        for solver in solvers or (EulerMaruyamaSolver(), HeunSolver()):
+        self._solvers: dict[str, Solver] = {}
+        for solver in (EulerMaruyamaSolver(), HeunSolver()) if solvers is None else solvers:
             self.register(solver)
+
+    @property
+    def solvers(self) -> Mapping[str, Solver]:
+        """Return a read-only view of registered solvers."""
+        return MappingProxyType(self._solvers)
 
     def register(self, solver: Solver) -> None:
         """Register a solver under its unique name."""
-        if solver.name in self.solvers:
+        if not isinstance(solver, Solver):
+            raise ConfigurationError("solver must implement the Solver contract")
+        if not isinstance(solver.name, str) or not solver.name.strip():
+            raise ConfigurationError("solver name must be a non-empty string")
+        if solver.name in self._solvers:
             raise ConfigurationError(f"solver already registered: {solver.name}")
-        self.solvers[solver.name] = solver
+        self._solvers[solver.name] = solver
 
     def get(self, name: str) -> Solver:
         """Return a solver or raise a descriptive configuration error."""
         try:
-            return self.solvers[name]
+            return self._solvers[name]
         except KeyError as error:
             raise ConfigurationError(
-                f"unknown solver {name!r}; available: {sorted(self.solvers)}"
+                f"unknown solver {name!r}; available: {sorted(self._solvers)}"
             ) from error
 
 
@@ -359,6 +427,12 @@ class DVSSampler:
         production: bool = False,
     ) -> None:
         """Initialize a sampler with explicit polymorphic collaborators."""
+        if not isinstance(drift_model, DriftModel):
+            raise ConfigurationError("drift_model must implement the DriftModel contract")
+        if not isinstance(noise_schedule, NoiseSchedule):
+            raise ConfigurationError("noise_schedule must implement the NoiseSchedule contract")
+        if not isinstance(controller, AdaptiveController):
+            raise ConfigurationError("controller must implement the AdaptiveController contract")
         self.drift_model = drift_model
         self.noise_schedule = noise_schedule
         self.controller = controller
@@ -383,8 +457,16 @@ class DVSSampler:
         self, state: GraphState, terminal_time: float = 1.0, seed: int | None = None
     ) -> SampleResult:
         """Sample from ``state`` to ``terminal_time`` using a fresh RNG."""
-        if not isfinite(terminal_time) or terminal_time < 0.0 or terminal_time > 1.0:
+        if (
+            isinstance(terminal_time, bool)
+            or not isinstance(terminal_time, (int, float))
+            or not isfinite(terminal_time)
+            or terminal_time < 0.0
+            or terminal_time > 1.0
+        ):
             raise ConfigurationError("terminal_time must be finite and within [0, 1]")
+        if not isinstance(state, GraphState):
+            raise ConfigurationError("state must be a GraphState")
         if seed is not None and (isinstance(seed, bool) or not isinstance(seed, int)):
             raise ConfigurationError("seed must be an integer or None")
         self.controller.reset()
@@ -402,7 +484,12 @@ class DVSSampler:
             drift = self.drift_model.evaluate(current_state, time)
             validate_drift_matches(current_state, drift)
             noise_scale = self.noise_schedule.value_at(time)
-            if not isfinite(noise_scale) or noise_scale < 0.0:
+            if (
+                isinstance(noise_scale, bool)
+                or not isinstance(noise_scale, (int, float))
+                or not isfinite(noise_scale)
+                or noise_scale < 0.0
+            ):
                 raise NumericalStabilityError("noise schedule returned an invalid noise scale")
             decision = self.controller.choose_timestep(
                 drift, previous_drift, noise_scale, time, terminal_time
@@ -447,6 +534,8 @@ class DVSSampler:
             current_state = next_state
             time = next_time
 
+        if terminal_time - time <= self.controller.eps_bound:
+            time = terminal_time
         return SampleResult(
             current_state,
             SamplerDiagnostics(tuple(diagnostics), step_number, time),

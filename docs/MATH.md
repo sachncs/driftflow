@@ -240,14 +240,15 @@ The paper uses `g_t` but does not specify its exact functional form.  We provide
 g(t) = sigma_max * t + sigma_min * (1 - t)
 ```
 
-**Cosine (approximate):**
+**Cosine (offset cosine ramp):**
 ```
-g(t) = tan((t + offset) / (1 + offset) * pi / 2)
+u = (t + offset) / (1 + offset)
+g(t) = sigma_min + (sigma_max - sigma_min) * (1 - cos(pi*u)) / 2
 ```
 
 **Polynomial:**
 ```
-g(t) = sigma_max * t^exponent + sigma_min
+g(t) = sigma_min + (sigma_max - sigma_min) * t^exponent
 ```
 
 All schedules are callables `g(t: float) -> float` and can be swapped by the user.

@@ -9,3 +9,5 @@ PYTHON="${PYTHON:-python3}"
 ./scripts/check.sh
 "$PYTHON" -m build
 "$PYTHON" -m pip_audit --skip-editable
+
+(cd site && npm ci && npm audit --omit=dev --audit-level=high && npm run build)

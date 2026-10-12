@@ -11,7 +11,14 @@ chronological order, with the full commit id, ISO-8601 datetime
 
 ## [Unreleased]
 
-No unreleased changes.
+### Changed
+
+- Hardened numerical boundaries, immutable approximation weights, diagnostics,
+  solver registries, schedule ordering, and terminal-time reporting.
+- Added failure-path contract tests and included reproducibility artifacts and
+  scripts in source distributions.
+- Added locked static-site audit/build checks to the unified quality gate and
+  CI; improved keyboard-accessible API tabs.
 
 ## [2.0.0] - 2026-10-12
 

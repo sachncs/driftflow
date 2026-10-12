@@ -2,7 +2,13 @@
 
 import pytest
 
-from driftflow.domain import DriftState, GraphState
+from driftflow.domain import (
+    AdaptiveDecision,
+    DriftState,
+    GraphState,
+    SamplerDiagnostics,
+    StepDiagnostics,
+)
 from driftflow.errors import NumericalStabilityError, ShapeError
 
 
@@ -28,3 +34,27 @@ def test_drift_state_uses_the_same_graph_contract() -> None:
     drift = DriftState.from_lists([[1.0]], [[0.0]])
 
     assert drift.features == ((1.0,),)
+
+
+@pytest.mark.parametrize("value", [["not-a-number"]], ids=["text"])
+def test_graph_state_rejects_non_numeric_values(value: list[list[object]]) -> None:
+    with pytest.raises(ShapeError, match="numeric"):
+        GraphState.from_lists(value, [[0.0]])  # type: ignore[arg-type]
+
+
+def test_graph_state_rejects_boolean_values() -> None:
+    with pytest.raises(ShapeError, match="numeric"):
+        GraphState.from_lists([[True]], [[0.0]])  # type: ignore[list-item]
+
+
+def test_diagnostics_are_validated_and_immutable() -> None:
+    step = StepDiagnostics(1, 0.0, 0.1, 0.0, 0.0, 0.0, 0.0)
+    diagnostics = SamplerDiagnostics((step,), 1, 0.1)
+    decision = AdaptiveDecision(0.1, 0.0, 0.0, 0.0, 0.0)
+
+    assert diagnostics.total_steps == 1
+    assert decision.timestep == 0.1
+    with pytest.raises(NumericalStabilityError):
+        StepDiagnostics(1, 0.0, 0.1, -1.0, 0.0, 0.0, 0.0)
+    with pytest.raises(ShapeError):
+        SamplerDiagnostics((step,), 0, 0.1)

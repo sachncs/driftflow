@@ -56,6 +56,7 @@ References:
 
 import math
 import random
+from collections.abc import Sequence
 
 from .contracts import DriftModel
 from .domain import DriftState, GraphState
@@ -79,13 +80,20 @@ def xavier_uniform(rows: int, cols: int, rng: random.Random) -> list[list[float]
         uniformly from ``[-limit, limit]`` where ``limit =
         sqrt(6 / (rows + cols))``.
     """
-    if rows <= 0 or cols <= 0:
+    if (
+        isinstance(rows, bool)
+        or isinstance(cols, bool)
+        or not isinstance(rows, int)
+        or not isinstance(cols, int)
+        or rows <= 0
+        or cols <= 0
+    ):
         raise ConfigurationError("xavier_uniform dimensions must be positive")
     limit = math.sqrt(6.0 / (rows + cols))
     return [[rng.uniform(-limit, limit) for _ in range(cols)] for _ in range(rows)]
 
 
-def matvec(matrix: list[list[float]], vector: list[float]) -> list[float]:
+def matvec(matrix: Sequence[Sequence[float]], vector: Sequence[float]) -> list[float]:
     """Multiply a matrix by a column vector.
 
     Args:
@@ -96,16 +104,22 @@ def matvec(matrix: list[list[float]], vector: list[float]) -> list[float]:
         A list of length ``m`` containing ``matrix @ vector``.
 
     Raises:
-        ValueError: Propagated from Python's ``zip`` if the inner
-            dimensions mismatch.
+        ShapeError: If the operands are empty, ragged, or incompatible.
 
     Complexity:
         O(m * n).
     """
-    return [sum(w * v for w, v in zip(row, vector, strict=True)) for row in matrix]
+    if not matrix or not vector:
+        raise ShapeError("matvec inputs must be non-empty")
+    width = len(vector)
+    if any(len(row) != width for row in matrix):
+        raise ShapeError("matvec matrix rows must match vector width")
+    return [
+        sum(weight * value for weight, value in zip(row, vector, strict=True)) for row in matrix
+    ]
 
 
-def matmul(a: list[list[float]], b: list[list[float]]) -> list[list[float]]:
+def matmul(a: Sequence[Sequence[float]], b: Sequence[Sequence[float]]) -> list[list[float]]:
     """Multiply two matrices using pure-Python loops.
 
     Used only by :class:`SimpleGraphDenoiser` for small matrices; for
@@ -171,9 +185,13 @@ def time_embedding(time: float, dim: int) -> list[float]:
 
     Edge cases:
         * ``dim = 0`` returns ``[]`` without sampling.
-        * Negative ``dim`` is treated like ``0`` by the loop guard.
+        * Negative ``dim`` raises :class:`ConfigurationError`.
     """
-    if dim < 0:
+    if isinstance(time, bool) or not isinstance(time, (int, float)) or not math.isfinite(time):
+        raise ConfigurationError("time must be finite")
+    if not 0.0 <= time <= 1.0:
+        raise ConfigurationError("time must be within [0, 1]")
+    if isinstance(dim, bool) or not isinstance(dim, int) or dim < 0:
         raise ConfigurationError("time embedding dimension must be non-negative")
     embedding: list[float] = []
     # Frequencies grow exponentially so the embedding can resolve
@@ -210,9 +228,8 @@ class SimpleGraphDenoiser(DriftModel):
     reshaped into the feature drift and adjacency drift for that node.
 
     Thread-safety:
-        Instances are **not** thread-safe because the weight matrices
-        are mutable (although in practice no method mutates them).
-        Build one instance per thread for safety.
+        Instances are safe for concurrent read-only evaluation because
+        architecture fields and weights are immutable after construction.
 
     Lifecycle:
         The model is constructed once with fixed shapes
@@ -229,6 +246,38 @@ class SimpleGraphDenoiser(DriftModel):
         >>> len(drift_x), len(drift_a)
         (4, 4)
     """
+
+    __slots__ = (
+        "num_nodes",
+        "feature_dim",
+        "hidden_dim",
+        "weight1",
+        "bias1",
+        "weight2",
+        "bias2",
+        "weight3",
+        "bias3",
+        "time_dim",
+        "_initialized",
+    )
+
+    def __setattr__(self, name: str, value: object) -> None:
+        """Prevent mutation of architecture and initialized weights."""
+        immutable_fields = {
+            "num_nodes",
+            "feature_dim",
+            "hidden_dim",
+            "weight1",
+            "bias1",
+            "weight2",
+            "bias2",
+            "weight3",
+            "bias3",
+            "time_dim",
+        }
+        if getattr(self, "_initialized", False) and name in immutable_fields:
+            raise AttributeError("SimpleGraphDenoiser instances are immutable")
+        object.__setattr__(self, name, value)
 
     def __init__(
         self,
@@ -255,29 +304,32 @@ class SimpleGraphDenoiser(DriftModel):
             ValueError: If any of ``num_nodes``, ``feature_dim``, or
                 ``hidden_dim`` is non-positive.
         """
-        if num_nodes <= 0:
+        if isinstance(num_nodes, bool) or not isinstance(num_nodes, int) or num_nodes <= 0:
             raise ValueError(f"num_nodes must be positive, got {num_nodes}")
-        if feature_dim <= 0:
+        if isinstance(feature_dim, bool) or not isinstance(feature_dim, int) or feature_dim <= 0:
             raise ValueError(f"feature_dim must be positive, got {feature_dim}")
-        if hidden_dim <= 0:
+        if isinstance(hidden_dim, bool) or not isinstance(hidden_dim, int) or hidden_dim <= 0:
             raise ValueError(f"hidden_dim must be positive, got {hidden_dim}")
         self.num_nodes = num_nodes
         self.feature_dim = feature_dim
         self.hidden_dim = hidden_dim
-        self.rng = random.Random(seed)
+        if isinstance(seed, bool) or not isinstance(seed, int):
+            raise ConfigurationError("seed must be an integer")
+        rng = random.Random(seed)
 
         # Per-node input = own features + adjacency row + time embedding.
         time_dim = 8
         input_dim = feature_dim + num_nodes + time_dim
         output_dim = feature_dim + num_nodes  # drift for X and A concatenated
 
-        self.weight1 = xavier_uniform(hidden_dim, input_dim, self.rng)
-        self.bias1 = [self.rng.gauss(0.0, 0.01) for _ in range(hidden_dim)]
-        self.weight2 = xavier_uniform(hidden_dim, hidden_dim, self.rng)
-        self.bias2 = [self.rng.gauss(0.0, 0.01) for _ in range(hidden_dim)]
-        self.weight3 = xavier_uniform(output_dim, hidden_dim, self.rng)
-        self.bias3 = [self.rng.gauss(0.0, 0.01) for _ in range(output_dim)]
+        self.weight1 = tuple(tuple(row) for row in xavier_uniform(hidden_dim, input_dim, rng))
+        self.bias1 = tuple(rng.gauss(0.0, 0.01) for _ in range(hidden_dim))
+        self.weight2 = tuple(tuple(row) for row in xavier_uniform(hidden_dim, hidden_dim, rng))
+        self.bias2 = tuple(rng.gauss(0.0, 0.01) for _ in range(hidden_dim))
+        self.weight3 = tuple(tuple(row) for row in xavier_uniform(output_dim, hidden_dim, rng))
+        self.bias3 = tuple(rng.gauss(0.0, 0.01) for _ in range(output_dim))
         self.time_dim = time_dim
+        self._initialized = True
 
     def mlp(self, features: list[float]) -> list[float]:
         """Forward pass through the 3-layer MLP with ReLU activations.
@@ -329,6 +381,8 @@ class SimpleGraphDenoiser(DriftModel):
         Complexity:
             O(N * input_dim * hidden_dim) for the per-node MLPs.
         """
+        validated_state = GraphState.from_lists(features, adjacency)
+        features, adjacency = validated_state.to_lists()
         if len(features) != self.num_nodes:
             raise ShapeError(f"features must have {self.num_nodes} rows, got {len(features)}")
         if len(adjacency) != self.num_nodes or any(len(row) != self.num_nodes for row in adjacency):

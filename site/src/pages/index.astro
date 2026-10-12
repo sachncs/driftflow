@@ -83,9 +83,9 @@ const tabs = [
       <div class="section-heading section-heading-inline"><div><p class="eyebrow">The v2 API</p><h2>Small surface. Strong contracts.</h2></div><p>Replace a model, schedule, controller, solver, or decoder without rewriting the sampler.</p></div>
       <div class="glass-panel code-card">
         <div class="code-toolbar"><div class="tab-list" role="tablist" aria-label="API examples">
-          {tabs.map((tab, index) => <button role="tab" id={`tab-${tab.id}`} aria-controls={`panel-${tab.id}`} aria-selected={index === 0 ? "true" : "false"} data-tab={tab.id}>{tab.label}</button>)}
+          {tabs.map((tab, index) => <button type="button" role="tab" id={`tab-${tab.id}`} aria-controls={`panel-${tab.id}`} aria-selected={index === 0 ? "true" : "false"} tabindex={index === 0 ? "0" : "-1"} data-tab={tab.id}>{tab.label}</button>)}
         </div><button class="copy-button" type="button" data-copy-target="api-sample">Copy</button></div>
-        {tabs.map((tab, index) => <pre id={`panel-${tab.id}`} role="tabpanel" aria-labelledby={`tab-${tab.id}`} data-panel={tab.id} hidden={index !== 0}><code>{tab.code}</code></pre>)}
+        {tabs.map((tab, index) => <pre id={`panel-${tab.id}`} role="tabpanel" tabindex="0" aria-labelledby={`tab-${tab.id}`} data-panel={tab.id} hidden={index !== 0}><code>{tab.code}</code></pre>)}
         <pre id="api-sample" class="sample-hidden" aria-hidden="true"><code>{quickStart}</code></pre>
       </div>
     </section>
@@ -112,13 +112,26 @@ const tabs = [
       catch { button.textContent = "Copy failed"; }
       window.setTimeout(() => { button.textContent = original; }, 1400);
     };
-    tabs.forEach((tab) => tab.addEventListener("click", () => {
+    const activateTab = (tab: HTMLButtonElement) => {
       const id = tab.dataset.tab;
       tabs.forEach((item) => item.setAttribute("aria-selected", String(item === tab)));
+      tabs.forEach((item) => item.setAttribute("tabindex", item === tab ? "0" : "-1"));
       panels.forEach((panel) => { panel.hidden = panel.dataset.panel !== id; });
       const active = panels.find((panel) => panel.dataset.panel === id);
       if (source && active) source.innerText = active.innerText;
-    }));
+    };
+    tabs.forEach((tab, index) => {
+      tab.addEventListener("click", () => activateTab(tab));
+      tab.addEventListener("keydown", (event) => {
+        if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
+        event.preventDefault();
+        const nextIndex = event.key === "ArrowRight"
+          ? (index + 1) % tabs.length
+          : (index - 1 + tabs.length) % tabs.length;
+        tabs[nextIndex].focus();
+        activateTab(tabs[nextIndex]);
+      });
+    });
     document.querySelectorAll<HTMLButtonElement>("[data-copy-target]").forEach((button) => button.addEventListener("click", () => {
       const target = document.querySelector<HTMLElement>(`#${button.dataset.copyTarget}`);
       if (target) copy(button, target);

@@ -11,6 +11,7 @@ from driftflow import (
     GraphState,
     GruMApproximation,
     LinearSchedule,
+    NumericalStabilityError,
     PolynomialSchedule,
     SigmoidGraphDecoder,
     ThresholdGraphDecoder,
@@ -61,11 +62,31 @@ def test_matrix_helpers_reject_dimension_mismatch() -> None:
     with pytest.raises(ValueError, match="matmul"):
         matmul([], [[1.0]])
     assert matvec([[1.0, 2.0]], [3.0, 4.0]) == [11.0]
+    with pytest.raises(ValueError, match="matvec"):
+        matvec([[1.0]], [1.0, 2.0])
+    with pytest.raises(ValueError, match="matvec"):
+        matvec([], [1.0])
 
 
 def test_time_embedding_rejects_negative_dimensions() -> None:
     with pytest.raises(ConfigurationError, match="dimension"):
         time_embedding(0.0, -1)
+    with pytest.raises(ConfigurationError, match="within"):
+        time_embedding(2.0, 2)
+    with pytest.raises(ConfigurationError, match="finite"):
+        time_embedding(float("nan"), 2)
+
+
+def test_approximation_weights_are_immutable_and_inputs_are_validated() -> None:
+    model = GruMApproximation(2, 2, seed=1)
+    assert isinstance(model.weight1, tuple)
+    assert not hasattr(model, "rng")
+    with pytest.raises(AttributeError, match="immutable"):
+        model.hidden_dim = 99  # type: ignore[misc]
+    with pytest.raises(NumericalStabilityError, match="finite"):
+        model.predict([[float("nan"), 0.0], [0.0, 0.0]], [[0.0, 0.0], [0.0, 0.0]], 0.0)
+    with pytest.raises(ConfigurationError, match="seed"):
+        GruMApproximation(2, 2, seed=True)  # type: ignore[arg-type]
 
 
 def test_decoders_are_polymorphic_and_stable_for_extreme_logits() -> None:

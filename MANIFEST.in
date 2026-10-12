@@ -10,7 +10,8 @@ recursive-include driftflow py.typed
 recursive-include docs *.md
 recursive-include examples *.py
 recursive-include tests *.py
-recursive-include scripts *.sh
+recursive-include scripts *.py *.sh
+recursive-include artifacts *.json *.ts
 recursive-include .github *.yml *.md
 
 # Exclude build artifacts and temporary files

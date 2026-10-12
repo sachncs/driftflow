@@ -18,6 +18,7 @@ from driftflow import (
     ShapeError,
     Solver,
     SolverRegistry,
+    compute_timestep,
     get_dataset_config,
 )
 
@@ -106,6 +107,13 @@ def test_sampler_returns_typed_result_and_exact_terminal_time() -> None:
     assert len(result.diagnostics.steps) == result.diagnostics.total_steps
 
 
+def test_sampler_reports_exact_terminal_time_within_boundary_tolerance() -> None:
+    result = build_sampler().sample(initial_state(), terminal_time=0.0000001, seed=7)
+
+    assert result.diagnostics.final_time == 0.0000001
+    assert result.diagnostics.total_steps == 0
+
+
 def test_sampler_is_reproducible_per_call_seed() -> None:
     sampler = build_sampler()
 
@@ -135,6 +143,11 @@ def test_registry_isolated_and_custom_solver_is_polymorphic() -> None:
     assert registry.get("Identity").name == "Identity"
     with pytest.raises(ConfigurationError, match="unknown solver"):
         SolverRegistry().get("Identity")
+    empty = SolverRegistry(())
+    with pytest.raises(ConfigurationError, match="unknown solver"):
+        empty.get("Euler-Maruyama")
+    with pytest.raises(TypeError):
+        empty.solvers["invalid"] = IdentitySolver()  # type: ignore[index]
 
 
 def test_invalid_drift_fails_before_integration() -> None:
@@ -175,3 +188,13 @@ def test_production_mode_rejects_educational_models() -> None:
             controller=controller,
             production=True,
         )
+
+
+def test_sampler_and_controller_reject_invalid_boundaries() -> None:
+    controller = DvsAdaptiveController(CommonConfig(), get_dataset_config("GruM", "QM9"), 0.22)
+    with pytest.raises(ConfigurationError, match="time"):
+        controller.choose_timestep(DriftState(((0.0,),), ((0.0,),)), None, 0.1, 0.5, 0.4)
+    with pytest.raises(ConfigurationError, match="timestep inputs"):
+        compute_timestep(0.0, 1.0, 0.1, 0.2, 0.3, 0.5, True)  # type: ignore[arg-type]
+    with pytest.raises(ConfigurationError, match="GraphState"):
+        build_sampler().sample([[0.0]], terminal_time=0.01, seed=1)  # type: ignore[arg-type]

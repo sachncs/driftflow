@@ -34,8 +34,10 @@ Production inference uses the optional PyTorch adapter:
 python3 -m pip install "driftflow[production]"
 ```
 
-The repository does not ship trained GruM or GDSS weights. Use a versioned,
-validated TorchScript checkpoint with `TorchScriptDriftModel` and enable
+The repository does not ship the upstream trained GruM or GDSS weights. It
+does ship a small, validated TorchScript reference checkpoint under
+`artifacts/` for exercising the production inference contract. Use a
+versioned, validated checkpoint with `TorchScriptDriftModel` and enable
 `production=True` on `DVSSampler`; the built-in approximation models are
 rejected in that mode.
 
@@ -112,9 +114,10 @@ and [docs/API_MIGRATION.md](docs/API_MIGRATION.md) for the full v2 surface.
 ## Production boundary
 
 The sampler and validation contracts are suitable for integrating a validated
-production model, but this repository is not a trained model distribution.
-Numerical results must be validated against the reference paper, the target
-dataset, and the deployed checkpoint before production rollout. See
+production model. The included compact checkpoint is a contract/reference
+artifact, not a production-quality GruM or GDSS model. Numerical results must
+be validated against the reference paper, the target dataset, and the
+deployed checkpoint before production rollout. See
 [docs/PRODUCTION.md](docs/PRODUCTION.md) for the checkpoint contract,
 integrity checks, rollout gates, and operational checklist.
 

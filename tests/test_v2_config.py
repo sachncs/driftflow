@@ -2,7 +2,14 @@
 
 import pytest
 
-from driftflow import CommonConfig, ConfigurationError, DatasetConfig, LinearSchedule
+from driftflow import (
+    CommonConfig,
+    ConfigurationError,
+    CosineSchedule,
+    DatasetConfig,
+    LinearSchedule,
+    PolynomialSchedule,
+)
 from driftflow.errors import ScheduleError
 
 
@@ -37,6 +44,8 @@ def test_dataset_ranges_are_immutable_tuples() -> None:
     assert config.active_range == ((0.0, 0.5),)
     assert config.is_active(0.5)
     assert not config.is_active(0.75)
+    with pytest.raises(ConfigurationError, match="within"):
+        config.is_active(2.0)
 
 
 def test_schedule_rejects_invalid_time_and_parameters() -> None:
@@ -44,6 +53,18 @@ def test_schedule_rejects_invalid_time_and_parameters() -> None:
         LinearSchedule(-1.0)
     with pytest.raises(ScheduleError, match=r"within \[0, 1\]"):
         LinearSchedule().value_at(2.0)
+    with pytest.raises(ScheduleError, match="must not exceed"):
+        LinearSchedule(1.0, 0.1)
+    with pytest.raises(ScheduleError, match="must not exceed"):
+        PolynomialSchedule(1.0, 1.0, 0.1)
+    with pytest.raises(ConfigurationError, match="offset"):
+        CosineSchedule(offset=True)  # type: ignore[arg-type]
+
+
+def test_schedule_endpoints_are_ordered() -> None:
+    polynomial = PolynomialSchedule(exponent=2.0, sigma_min=0.1, sigma_max=0.5)
+    assert polynomial.value_at(0.0) == 0.1
+    assert polynomial.value_at(1.0) == 0.5
 
 
 @pytest.mark.parametrize(
