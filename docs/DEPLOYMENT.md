@@ -1,243 +1,78 @@
-# Deployment Guide
+# Deployment
 
-This document covers deploying `driftflow` in various environments.
+driftflow 2.0.0 is a typed library release and a static documentation site.
+The runtime has no network or service dependency; deploy the package and site
+independently.
 
-## Installation
-
-### From Source (Recommended)
-
-```bash
-git clone https://github.com/sachncs/driftflow.git
-cd driftflow
-pip install -e .
-```
-
-### As a Dependency
-
-Add to your project's `pyproject.toml`:
-
-```toml
-[project]
-dependencies = [
-    "driftflow",
-]
-
-# Or pin to a version
-dependencies = [
-    "driftflow>=1.0.0",
-]
-```
-
-### In a Requirements File
-
-```
-driftflow
-```
-
-## Environment Considerations
-
-### Python Version
-
-Requires Python 3.10 or later. Verify with:
+## Package build
 
 ```bash
-python --version  # Must be >= 3.10
+python3 -m pip install -e ".[dev]"
+PYTHON=.venv/bin/python ./scripts/ci.sh
 ```
 
-### No Runtime Dependencies
+The CI script builds the sdist and wheel and runs pip-audit with the editable
+package excluded from the vulnerability scan. Install the wheel in a clean
+environment before publishing it.
 
-`driftflow` uses only the Python standard library. No additional system packages are required.
+## Library integration
 
-### Virtual Environments
-
-Always install in a virtual environment:
-
-```bash
-python -m venv .venv
-source .venv/bin/activate  # Linux/macOS
-# or
-.venv\Scripts\activate     # Windows
-
-pip install driftflow
-```
-
-## Production Usage
-
-### Basic Integration
+Models, schedules, controllers, and solvers are explicit collaborators:
 
 ```python
 from driftflow import (
     CommonConfig,
-    get_dataset_config,
+    DvsAdaptiveController,
     DVSSampler,
+    GraphState,
+    GruMApproximation,
     LinearSchedule,
-    make_drift_function,
+    get_dataset_config,
 )
 
-# Initialize once at module level
-common_config = CommonConfig()
-dataset_configs = {
-    ("GruM", "QM9"): get_dataset_config("GruM", "QM9"),
-    ("GruM", "ZINC250k"): get_dataset_config("GruM", "ZINC250k"),
-}
+state = GraphState.from_lists(
+    features=[[0.0, 0.0], [0.0, 0.0]],
+    adjacency=[[0.0, 0.0], [0.0, 0.0]],
+)
+model = GruMApproximation(num_nodes=2, feature_dim=2, seed=7)
+dataset = get_dataset_config("GruM", "QM9")
+controller = DvsAdaptiveController(CommonConfig(), dataset, gamma=0.22)
+sampler = DVSSampler(model, LinearSchedule(0.01, 0.5), controller)
 
-def generate_graph(drift_function, model, dataset, seed=None):
-    """Generate a graph using DVS adaptive sampling."""
-    config = dataset_configs[(model, dataset)]
-    schedule = LinearSchedule(sigma_min=0.01, sigma_max=0.5)
-
-    sampler = DVSSampler(
-        drift_function=drift_function,
-        noise_schedule=schedule,
-        common_config=common_config,
-        dataset_config=config,
-        solver="Euler",
-        seed=seed,
-    )
-
-    # Initial noise (shapes must match your graph dimensions)
-    features_0 = [[0.0] * 4 for _ in range(9)]
-    adjacency_0 = [[0.0] * 9 for _ in range(9)]
-
-    features_t, adjacency_t, info = sampler.sample(
-        initial_features=features_0,
-        initial_adjacency=adjacency_0,
-        terminal_time=1.0,
-    )
-
-    return features_t, adjacency_t, info
+result = sampler.sample(state, terminal_time=1.0, seed=42)
+print(result.diagnostics.total_steps, result.diagnostics.final_time)
 ```
 
-### Performance Considerations
+For a custom denoiser, implement `DriftModel.evaluate` and return a validated
+`DriftState`. The approximation models included in this repository are
+educational stand-ins, not trained production denoisers.
 
-- **Numerical stability:** Use the default `eps_num=1e-12` unless you have specific requirements.
-- **Solver choice:** Euler is the fast first-order integrator; Heun is a second-order predictor-corrector that requires an extra drift evaluation per step. With zero noise the two reduce to Euler-equivalent; for non-zero noise Heun's accuracy advantage depends on the corrector sharing the Brownian path with the predictor, which the current implementation enforces (see `docs/MATH.md §9`).
-- **Timestep bounds:** Adjust `dt_min` and `dt_max` if you observe convergence issues or excessive step counts.
-
-### Resource Usage
-
-| Resource | Typical Usage |
-|----------|---------------|
-| Memory | Proportional to graph size (nodes x features) |
-| CPU | Pure Python; single-threaded. Consider NumPy vectorization for large graphs (see `docs/EXTENSIONS.md`) |
-| Network | None (no external calls) |
-| Disk | None (no caching) |
-
-## Docker Deployment
-
-### Dockerfile
+## Container smoke test
 
 ```dockerfile
 FROM python:3.12-slim
-
 WORKDIR /app
-
-# Copy and install package
 COPY . .
-RUN pip install --no-cache-dir .
-
-# Copy application code
-COPY your_app/ /app/your_app/
-
-CMD ["python", "-m", "your_app.main"]
+RUN python -m pip install --no-cache-dir .
+CMD ["python", "examples/demo.py", "--model", "GruM", "--dataset", "QM9", "--solver", "Euler-Maruyama", "--use-approximation"]
 ```
 
-### Build and Run
+## Static site
 
 ```bash
-docker build -t your-app .
-docker run your-app
+cd site
+npm ci
+npm run build
 ```
 
-## Testing in Production
+The Pages workflow publishes `site/dist` and copies the generated index to
+`404.html` when Astro has not produced one. The site is configured for the
+project path `/driftflow`.
 
-### Smoke Test
+## Operational checks
 
-After deployment, verify the package works:
-
-```python
-from driftflow import (
-    DVSSampler,
-    CommonConfig,
-    DatasetConfig,
-    LinearSchedule,
-)
-
-config = CommonConfig()
-dataset_config = DatasetConfig(
-    model="Test",
-    dataset="Test",
-    kappa_ref=1.0,
-    gamma_euler=0.5,
-    gamma_heun=0.5,
-    active_range=[(0.0, 1.0)],
-)
-schedule = LinearSchedule(sigma_min=0.01, sigma_max=0.5)
-
-# Minimal test
-def dummy_drift(X, A, t):
-    return [[0.0] * len(X[0]) for _ in X], [[0.0] * len(A[0]) for _ in A]
-
-sampler = DVSSampler(
-    drift_function=dummy_drift,
-    noise_schedule=schedule,
-    common_config=config,
-    dataset_config=dataset_config,
-    solver="Euler",
-    seed=42,
-)
-
-X, A, info = sampler.sample(
-    initial_features=[[0.1]],
-    initial_adjacency=[[0.1]],
-    terminal_time=1.0,
-)
-
-assert info["total_steps"][0] > 0
-print("Smoke test passed")
-```
-
-## Monitoring
-
-Key metrics to monitor in production:
-
-| Metric | Key | Healthy Range |
-|--------|-----|---------------|
-| Total steps | `info["total_steps"][0]` | 10-1000 (varies by problem) |
-| Final time | `info["final_time"][0]` | Close to `terminal_time` |
-| Feature DVS | `info["v_x"]`, `info["smoothed_x"]` | Should converge toward zero |
-| Adjacency DVS | `info["v_a"]`, `info["smoothed_a"]` | Should converge toward zero |
-| Timestep sizes | `info["dt"]` | Between `dt_min` and `dt_max` |
-
-## Troubleshooting
-
-### "Maximum iterations exceeded"
-
-Increase `terminal_time` or adjust `dt_max` to allow larger steps.
-
-### Numerical instability (NaN/Inf in output)
-
-- Ensure `eps_num` is not too small
-- Check that initial noise values are reasonable
-- Verify drift function output is bounded
-
-### Slow performance
-
-- The sampler is pure Python. For large graphs, consider the NumPy vectorization extensions in `docs/EXTENSIONS.md`.
-- Profile with `python -m cProfile your_script.py` to identify bottlenecks.
-
-## Version Pinning
-
-For reproducible deployments, pin the exact version:
-
-```
-driftflow==1.0.0
-```
-
-Or in `pyproject.toml`:
-
-```toml
-dependencies = [
-    "driftflow==1.0.0",
-]
-```
+Monitor `SampleResult.diagnostics` rather than parsing logs. In particular,
+track total steps, final time, timestep bounds, and failure counts by
+`ConfigurationError`, `ShapeError`, `NumericalStabilityError`, and
+`SamplingLimitError`. Set an application-level timeout around sampling and
+keep `max_steps` finite for every deployment.
