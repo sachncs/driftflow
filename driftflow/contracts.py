@@ -18,6 +18,10 @@ class DriftModel(ABC):
 class NoiseSchedule(ABC):
     """Abstract diffusion noise schedule."""
 
+    def __call__(self, time: float) -> float:
+        """Evaluate the schedule using its canonical object interface."""
+        return self.value_at(time)
+
     @abstractmethod
     def value_at(self, time: float) -> float:
         """Return the scalar noise scale at ``time``."""

@@ -1,234 +1,127 @@
-"""Noise schedule utilities for the diffusion noise scale ``g(t)``.
+"""Validated polymorphic noise schedules for diffusion sampling."""
 
-The paper treats ``g(t)`` as **locally constant** during each solver
-step because its variation along the sampling trajectory is orders of
-magnitude smaller than the drift variation (see Appendix A.2 of the
-paper).  The exact functional form of ``g(t)`` is not specified, so
-this module provides several common parameterisations used in the
-diffusion-model literature and lets users supply their own callable.
+from math import isfinite, pi, sin
 
-Architecture overview
----------------------
-* :data:`NoiseSchedule` -- type alias for ``Callable[[float], float]``.
-* :class:`LinearSchedule` -- linear interpolation between
-  ``sigma_min`` and ``sigma_max``.
-* :class:`CosineSchedule` -- approximate implementation of the
-  cosine schedule popularised by Nichol & Dhariwal (2021).
-* :class:`PolynomialSchedule` -- flexible power-law family that
-  subsumes linear (``exponent=1``) and square-root-like schedules.
-* :func:`constant_schedule` -- factory returning a time-independent
-  callable; useful for deterministic tests and debugging.
-
-Why callables instead of objects?
----------------------------------
-Storing the schedule as a callable rather than a frozen dataclass keeps
-the sampler API simple (``noise_schedule(t)`` is all the consumer ever
-needs) and lets users plug in arbitrary schedules (e.g. learned,
-piecewise, or schedule-distilled variants) without subclassing.
-
-Assumptions
------------
-* ``t`` is in the closed interval ``[0, 1]`` for the standard
-  parameterisations.  Callers may extend this range, but behaviour
-  outside ``[0, 1]`` is schedule-specific.
-* All schedules return positive reals (the cosine and polynomial
-  schedules use a small offset or floor to guarantee positivity).
-
-Limitations
------------
-* The cosine schedule is an *approximation* of the one used in
-  Improved DDPM; replace it with the exact formula when known.
-* None of the bundled schedules are learned -- they are deterministic
-  curves parameterised by a handful of floats.
-
-References:
-----------
-* Nichol & Dhariwal, "Improved Denoising Diffusion Probabilistic
-  Models", 2021.
-* Ho et al., "Denoising Diffusion Probabilistic Models", 2020.
-"""
-
-import math
-from collections.abc import Callable
-
-NoiseSchedule = Callable[[float], float]
-"""Type alias for a callable noise schedule ``g(t) -> float``."""
+from .contracts import NoiseSchedule
+from .errors import ConfigurationError, ScheduleError
 
 
-class LinearSchedule:
-    """Linear interpolation between ``sigma_min`` and ``sigma_max``.
+def validate_time(time: float) -> float:
+    """Validate and return a finite diffusion time."""
+    if not isfinite(time):
+        raise ScheduleError(f"time must be finite, got {time!r}")
+    if time < 0.0 or time > 1.0:
+        raise ScheduleError(f"time must be within [0, 1], got {time!r}")
+    return time
 
-    Implements
 
-        ``g(t) = sigma_max * t + sigma_min * (1 - t)``
+def validate_noise_scale(value: float, name: str) -> float:
+    """Validate and return a finite non-negative noise scale."""
+    if not isfinite(value) or value < 0.0:
+        raise ScheduleError(f"{name} must be finite and non-negative, got {value!r}")
+    return value
 
-    so that ``g(0) = sigma_min`` and ``g(1) = sigma_max``.  The
-    schedule is monotonic increasing when ``sigma_max > sigma_min``
-    and monotonic decreasing otherwise; equal endpoints collapse the
-    schedule to a constant.
 
-    Lifecycle:
-        Instances are stateless after construction.  They may be
-        reused across many sampling runs without re-initialisation.
-
-    Example:
-        >>> sched = LinearSchedule(sigma_min=0.01, sigma_max=0.5)
-        >>> sched(0.0), sched(1.0)
-        (0.01, 0.5)
-    """
+class LinearSchedule(NoiseSchedule):
+    """Linearly interpolate between two non-negative noise scales."""
 
     def __init__(self, sigma_min: float = 0.01, sigma_max: float = 1.0) -> None:
-        """Initialize the linear schedule.
+        """Initialize the schedule.
 
         Args:
-            sigma_min: Noise scale at ``t = 0``.
-            sigma_max: Noise scale at ``t = 1``.
+            sigma_min: Noise scale at diffusion time zero.
+            sigma_max: Noise scale at diffusion time one.
+
+        Raises:
+            ScheduleError: If either scale is invalid.
         """
-        self.sigma_min = sigma_min
-        self.sigma_max = sigma_max
+        self.sigma_min = validate_noise_scale(sigma_min, "sigma_min")
+        self.sigma_max = validate_noise_scale(sigma_max, "sigma_max")
 
-    def __call__(self, time: float) -> float:
-        """Evaluate the linear noise schedule at the given diffusion time.
-
-        Args:
-            time: Diffusion time ``t``.  Typically in ``[0, 1]``.
-
-        Returns:
-            The interpolated noise scale ``g(t)``.
-        """
-        return self.sigma_max * time + self.sigma_min * (1.0 - time)
+    def value_at(self, time: float) -> float:
+        """Return the interpolated noise scale at ``time``."""
+        time = validate_time(time)
+        return self.sigma_min + (self.sigma_max - self.sigma_min) * time
 
 
-class CosineSchedule:
-    """Approximate implementation of the cosine noise schedule.
-
-    This schedule is a simplified analogue of the cosine schedule
-    popularised by *Improved Denoising Diffusion Probabilistic Models*
-    (Nichol & Dhariwal, 2021):
-
-        ``g(t) = tan((t + offset) / (1 + offset) * pi / 2)``
-
-    The ``offset`` term prevents division-by-zero and the resulting
-    singularity at ``t = 0``.  Because the paper does not specify the
-    exact cosine formulation it uses, this can be swapped for the
-    precise schedule once known.
-
-    Example:
-        >>> sched = CosineSchedule(offset=0.008)
-        >>> sched(0.0) > 0.0 and math.isfinite(sched(1.0))
-        True
-    """
-
-    def __init__(self, offset: float = 0.008) -> None:
-        """Initialize the cosine schedule.
-
-        Args:
-            offset: Small positive offset preventing division by zero
-                at ``t = 0``.  The Improved-DDPM paper uses
-                ``offset = 0.008``; smaller values move the singularity
-                closer to ``t = 0`` but may produce numerical issues.
-        """
-        self.offset = offset
-
-    def __call__(self, time: float) -> float:
-        """Evaluate the approximate cosine noise schedule.
-
-        Args:
-            time: Diffusion time ``t`` in ``[0, 1]``.
-
-        Returns:
-            The tangent-based noise scale ``g(t)``.  Always positive
-            for ``time >= 0`` and finite everywhere in ``[0, 1]``.
-
-        Edge cases:
-            * ``time = 0`` returns ``tan(offset / (1 + offset) * pi / 2)``
-              which is strictly positive when ``offset > 0``.
-            * ``time = 1`` would evaluate ``tan(pi / 2)`` which is
-              mathematically infinite; the argument is clamped to
-              ``pi / 2 - 1e-12`` so the schedule remains finite at
-              the diffusion horizon.
-        """
-        arg = (time + self.offset) / (1.0 + self.offset) * math.pi / 2.0
-        # tan diverges at pi/2; keep the argument strictly below the
-        # singularity so the schedule remains finite everywhere.
-        if arg >= math.pi / 2.0:
-            arg = math.pi / 2.0 - 1e-12
-        return math.tan(arg)
-
-
-class PolynomialSchedule:
-    """Power-law noise schedule ``g(t) = sigma_max * t**exponent + sigma_min``.
-
-    A flexible family of monotonic schedules that subsumes:
-
-    * Linear (``exponent = 1``).
-    * Quadratic (``exponent = 2``).
-    * Square-root (``exponent = 0.5``).
-    * Constant (``exponent = 0`` with ``sigma_min = 0``).
-
-    The schedule is monotonic increasing for positive exponents and
-    positive ``sigma_max``.
-
-    Example:
-        >>> sched = PolynomialSchedule(exponent=2.0, sigma_min=0.0, sigma_max=1.0)
-        >>> sched(0.5)
-        0.25
-    """
+class CosineSchedule(NoiseSchedule):
+    """Monotonic cosine-ramp noise schedule on the unit diffusion interval."""
 
     def __init__(
-        self, exponent: float = 1.0, sigma_min: float = 0.01, sigma_max: float = 1.0
+        self,
+        offset: float = 0.008,
+        sigma_min: float = 0.0,
+        sigma_max: float = 1.0,
     ) -> None:
-        """Initialize the polynomial schedule.
+        """Initialize the schedule.
 
         Args:
-            exponent: Power-law exponent applied to ``t``.
-            sigma_min: Minimum noise scale (floor).
-            sigma_max: Maximum noise scale (at ``t = 1``).
+            offset: Positive endpoint offset used by the cosine ramp.
+            sigma_min: Noise scale at the beginning of the ramp.
+            sigma_max: Noise scale at the end of the ramp.
+
+        Raises:
+            ConfigurationError: If the parameters are invalid.
         """
+        if not isfinite(offset) or offset < 0.0 or offset >= 1.0:
+            raise ConfigurationError("offset must be finite and within [0, 1)")
+        self.offset = offset
+        self.sigma_min = validate_noise_scale(sigma_min, "sigma_min")
+        self.sigma_max = validate_noise_scale(sigma_max, "sigma_max")
+
+    def value_at(self, time: float) -> float:
+        """Return the cosine-ramp noise scale at ``time``."""
+        time = validate_time(time)
+        normalized_time = (time + self.offset) / (1.0 + self.offset)
+        angle = min(pi / 2.0, max(0.0, normalized_time * pi / 2.0))
+        fraction = sin(angle)
+        return self.sigma_min + (self.sigma_max - self.sigma_min) * fraction
+
+
+class PolynomialSchedule(NoiseSchedule):
+    """Power-law noise schedule with validated non-negative parameters."""
+
+    def __init__(
+        self,
+        exponent: float = 1.0,
+        sigma_min: float = 0.01,
+        sigma_max: float = 1.0,
+    ) -> None:
+        """Initialize the schedule.
+
+        Args:
+            exponent: Non-negative power applied to normalized time.
+            sigma_min: Noise scale floor.
+            sigma_max: Noise scale contribution at time one.
+
+        Raises:
+            ConfigurationError: If the parameters are invalid.
+        """
+        if not isfinite(exponent) or exponent < 0.0:
+            raise ConfigurationError("exponent must be finite and non-negative")
         self.exponent = exponent
-        self.sigma_min = sigma_min
-        self.sigma_max = sigma_max
+        self.sigma_min = validate_noise_scale(sigma_min, "sigma_min")
+        self.sigma_max = validate_noise_scale(sigma_max, "sigma_max")
 
-    def __call__(self, time: float) -> float:
-        """Evaluate the polynomial noise schedule.
-
-        Args:
-            time: Diffusion time ``t`` in ``[0, 1]``.
-
-        Returns:
-            The polynomial noise scale ``sigma_max * t**exponent + sigma_min``.
-
-        Edge cases:
-            * ``time = 0`` and ``exponent = 0`` evaluates to ``1.0``
-              because Python defines ``0 ** 0 == 1``.
-            * Negative ``time`` raises ``ValueError`` (Python's
-              behaviour for ``neg ** non-integer``).
-        """
-        powered: float = time**self.exponent
-        return self.sigma_max * powered + self.sigma_min
+    def value_at(self, time: float) -> float:
+        """Return the power-law noise scale at ``time``."""
+        time = validate_time(time)
+        return self.sigma_min + self.sigma_max * time**self.exponent
 
 
-def constant_schedule(value: float = 1.0) -> NoiseSchedule:
-    """Return a constant noise schedule useful for testing.
+class ConstantSchedule(NoiseSchedule):
+    """Noise schedule returning one fixed scale for every valid time."""
 
-    The returned callable ignores its argument and always returns
-    ``value``.  This is helpful for unit tests that need to isolate
-    the behaviour of the sampler from the choice of ``g(t)``.
+    def __init__(self, value: float = 1.0) -> None:
+        """Initialize the constant schedule."""
+        self.value = validate_noise_scale(value, "value")
 
-    Args:
-        value: The constant noise scale to return for all times.
+    def value_at(self, time: float) -> float:
+        """Return the configured scale after validating ``time``."""
+        validate_time(time)
+        return self.value
 
-    Returns:
-        A callable that ignores its argument and always returns
-        ``value``.
 
-    Example:
-        >>> sched = constant_schedule(0.5)
-        >>> sched(0.0), sched(1.0), sched(123.0)
-        (0.5, 0.5, 0.5)
-    """
-
-    def schedule(time: float) -> float:
-        return value
-
-    return schedule
+def constant_schedule(value: float = 1.0) -> ConstantSchedule:
+    """Create a validated constant noise schedule."""
+    return ConstantSchedule(value)
