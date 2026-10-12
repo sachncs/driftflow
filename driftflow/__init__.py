@@ -6,8 +6,8 @@ from .domain import (
     AdaptiveDecision,
     DriftState,
     GraphState,
-    SampleResult,
     SamplerDiagnostics,
+    SampleResult,
     StepDiagnostics,
 )
 from .errors import (
@@ -21,8 +21,8 @@ from .errors import (
 )
 from .models import GDSSApproximation, GruMApproximation, SimpleGraphDenoiser, make_drift_function
 from .sampler import (
-    DVSSampler,
     DvsAdaptiveController,
+    DVSSampler,
     EulerMaruyamaSolver,
     HeunSolver,
     SolverRegistry,
@@ -49,10 +49,12 @@ __all__ = [
     "ConstantSchedule",
     "CosineSchedule",
     "DATASET_CONFIGS",
+    "DatasetConfig",
     "DVSSampler",
     "DriftModel",
     "DriftState",
     "DriftflowError",
+    "DvsAdaptiveController",
     "EulerMaruyamaSolver",
     "GDSSApproximation",
     "GraphDecoder",
