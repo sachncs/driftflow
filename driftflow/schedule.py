@@ -106,7 +106,8 @@ class PolynomialSchedule(NoiseSchedule):
     def value_at(self, time: float) -> float:
         """Return the power-law noise scale at ``time``."""
         time = validate_time(time)
-        return self.sigma_min + self.sigma_max * time**self.exponent
+        powered_time = float(time**self.exponent)
+        return self.sigma_min + self.sigma_max * powered_time
 
 
 class ConstantSchedule(NoiseSchedule):
