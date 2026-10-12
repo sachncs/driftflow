@@ -7,4 +7,4 @@ derive the version from exactly one place.  Bump the version here and
 nowhere else.
 """
 
-__version__ = "1.0.0"
+__version__ = "2.0.0"
