@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import sys
 from contextlib import contextmanager
 from pathlib import Path
@@ -140,3 +141,32 @@ def test_torchscript_adapter_reports_missing_dependency(tmp_path: Path, monkeypa
 
     with pytest.raises(ConfigurationError, match="requires PyTorch"):
         TorchScriptDriftModel(checkpoint, 2, 1, expected_sha256=sha256_file(checkpoint))
+
+
+def test_torchscript_adapter_loads_and_validates_manifest(tmp_path: Path, monkeypatch) -> None:
+    checkpoint = tmp_path / "model.ts"
+    checkpoint.write_bytes(b"checkpoint-v1")
+    manifest = tmp_path / "model.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "checkpoint": checkpoint.name,
+                "sha256": sha256_file(checkpoint),
+                "num_nodes": 2,
+                "feature_dim": 1,
+                "feature_order": ["feature_0"],
+                "preprocessing": {"name": "identity", "version": "1"},
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setitem(sys.modules, "torch", FakeTorch("torch"))
+    model = TorchScriptDriftModel.from_manifest(manifest)
+    assert model.num_nodes == 2
+    assert model.feature_dim == 1
+
+    invalid = json.loads(manifest.read_text(encoding="utf-8"))
+    invalid["feature_order"] = ["wrong"]
+    manifest.write_text(json.dumps(invalid), encoding="utf-8")
+    with pytest.raises(ConfigurationError, match="canonical order"):
+        TorchScriptDriftModel.from_manifest(manifest)

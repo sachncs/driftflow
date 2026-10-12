@@ -1,0 +1,16 @@
+{
+  "iterations": 100,
+  "artifact_bytes": 15173,
+  "latency_ms": {
+    "p50": 0.048333,
+    "p95": 0.050291,
+    "max": 0.054333
+  },
+  "concurrent": {
+    "workers": 8,
+    "requests": 100,
+    "seconds": 0.008296541986055672,
+    "requests_per_second": 12053.214479969363
+  },
+  "note": "macOS local baseline; rerun on the target production host before setting SLOs"
+}

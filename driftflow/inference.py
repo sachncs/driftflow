@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 import threading
 from os import PathLike
@@ -92,6 +93,58 @@ class TorchScriptDriftModel(DriftModel):
         self.feature_dim = feature_dim
         self.device = str(self._device)
         self._lock = threading.RLock()
+
+    @classmethod
+    def from_manifest(
+        cls,
+        manifest: str | PathLike[str],
+        *,
+        checkpoint: str | PathLike[str] | None = None,
+        device: str = "cpu",
+    ) -> TorchScriptDriftModel:
+        """Load a checkpoint using its signed deployment manifest.
+
+        The manifest is intentionally explicit: feature order and preprocessing
+        are deployment metadata, while the adapter enforces the tensor shapes
+        and digest.  Callers can therefore fail closed when a model artifact is
+        paired with the wrong input pipeline.
+        """
+        manifest_path = Path(manifest)
+        try:
+            metadata = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as error:
+            raise ConfigurationError(f"unable to read model manifest {manifest_path}") from error
+        required = {
+            "checkpoint",
+            "sha256",
+            "num_nodes",
+            "feature_dim",
+            "feature_order",
+            "preprocessing",
+        }
+        if not required.issubset(metadata):
+            missing = sorted(required - set(metadata))
+            raise ConfigurationError(f"model manifest is missing fields: {', '.join(missing)}")
+        if metadata["feature_order"] != [
+            f"feature_{index}" for index in range(metadata["feature_dim"])
+        ]:
+            raise ConfigurationError(
+                "model manifest feature_order is not the declared canonical order"
+            )
+        if metadata["preprocessing"] != {"name": "identity", "version": "1"}:
+            raise ConfigurationError("unsupported model preprocessing contract")
+        checkpoint_path = (
+            Path(checkpoint)
+            if checkpoint is not None
+            else manifest_path.parent / metadata["checkpoint"]
+        )
+        return cls(
+            checkpoint_path,
+            num_nodes=metadata["num_nodes"],
+            feature_dim=metadata["feature_dim"],
+            device=device,
+            expected_sha256=metadata["sha256"],
+        )
 
     def evaluate(self, state: GraphState, time: float) -> DriftState:
         """Run inference and convert a validated tensor result to ``DriftState``."""
