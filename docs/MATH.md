@@ -38,7 +38,7 @@ The simplest first-order discretisation is:
 x_{t+dt} = x_t + f_t dt + g_t sqrt(dt) z_t,   z_t ~ N(0, I)
 ```
 
-This is implemented in `euler_step()` (`sampler.py`).
+This is implemented by `EulerMaruyamaSolver.step()` (`sampler.py`).
 
 ---
 
@@ -147,7 +147,7 @@ After each adaptive step, the two EMA states are replaced by a single aggregated
 Vbar_X, Vbar_A <- gamma * (Vbar_X + Vbar_A)
 ```
 
-**Implementation:** `global_refresh()` (`sampler.py`).
+**Implementation:** `DvsAdaptiveController.choose_timestep()` (`sampler.py`).
 
 **Why this works:**
 - Both modalities receive the same combined score, so future bottleneck decisions are not biased by whichever modality happened to be smoother.
@@ -190,7 +190,7 @@ The Heun solver is a second-order method:
 
 The same noise realisation `Z` is used in both stages so that the corrector remains consistent with the same Brownian path.
 
-**Implementation:** `heun_step()` (`sampler.py`).
+**Implementation:** `HeunSolver.step()` (`sampler.py`).
 
 **Accuracy:** On the test problem `dx/dt = -x` (analytical solution `exp(-t)`), Heun is measurably closer to the true solution than Euler for the same step count.
 
