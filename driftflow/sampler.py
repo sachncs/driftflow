@@ -1,7 +1,5 @@
 """Polymorphic, validated adaptive SDE sampling."""
 
-from abc import abstractmethod
-from collections.abc import Callable
 from math import isfinite, sqrt
 from random import Random
 
@@ -11,8 +9,8 @@ from .domain import (
     AdaptiveDecision,
     DriftState,
     GraphState,
-    SampleResult,
     SamplerDiagnostics,
+    SampleResult,
     StepDiagnostics,
 )
 from .errors import (
@@ -20,11 +18,12 @@ from .errors import (
     NumericalStabilityError,
     SamplingLimitError,
     ShapeError,
-    SolverContractError,
 )
 
 
-def squared_l2_difference(current: tuple[tuple[float, ...], ...], previous: tuple[tuple[float, ...], ...]) -> float:
+def squared_l2_difference(
+    current: tuple[tuple[float, ...], ...], previous: tuple[tuple[float, ...], ...]
+) -> float:
     """Return the squared L2 difference between two equally shaped matrices."""
     if len(current) != len(previous):
         raise ShapeError("variation matrices must have the same row count")
@@ -44,7 +43,9 @@ def compute_drift_variation_score(
 ) -> tuple[float, float]:
     """Compute feature and adjacency DVS values with a stable denominator."""
     if not isfinite(noise_scale) or noise_scale < 0.0:
-        raise NumericalStabilityError(f"noise_scale must be finite and non-negative, got {noise_scale!r}")
+        raise NumericalStabilityError(
+            f"noise_scale must be finite and non-negative, got {noise_scale!r}"
+        )
     denominator = noise_scale * noise_scale + eps_num
     return (
         squared_l2_difference(current.features, previous.features) / denominator,
@@ -77,7 +78,9 @@ def compute_timestep(
 ) -> float:
     """Compute and bound the power-law adaptive timestep."""
     if not isfinite(smoothed_score) or smoothed_score < 0.0:
-        raise NumericalStabilityError(f"smoothed_score must be finite and non-negative, got {smoothed_score!r}")
+        raise NumericalStabilityError(
+            f"smoothed_score must be finite and non-negative, got {smoothed_score!r}"
+        )
     raw_timestep = dt_base * float((kappa_ref / (smoothed_score + eps_num)) ** beta)
     return max(dt_min, min(dt_max, raw_timestep))
 
@@ -229,7 +232,9 @@ def apply_drift_and_noise(
     random_generator: Random,
 ) -> GraphState:
     """Apply one stochastic update with independently sampled entries."""
-    return advance_with_noise(state, drift, timestep, draw_noise(state, noise_scale, random_generator))
+    return advance_with_noise(
+        state, drift, timestep, draw_noise(state, noise_scale, random_generator)
+    )
 
 
 def draw_noise(
@@ -357,7 +362,9 @@ class DVSSampler:
         self.solver_registry = solver_registry or SolverRegistry()
         self.solver = self.solver_registry.get(solver_name)
 
-    def sample(self, state: GraphState, terminal_time: float = 1.0, seed: int | None = None) -> SampleResult:
+    def sample(
+        self, state: GraphState, terminal_time: float = 1.0, seed: int | None = None
+    ) -> SampleResult:
         """Sample from ``state`` to ``terminal_time`` using a fresh RNG."""
         if not isfinite(terminal_time) or terminal_time < 0.0 or terminal_time > 1.0:
             raise ConfigurationError("terminal_time must be finite and within [0, 1]")

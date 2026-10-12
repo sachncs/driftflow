@@ -65,7 +65,6 @@ from collections.abc import Callable
 from .contracts import DriftModel
 from .domain import DriftState, GraphState
 from .errors import ConfigurationError, ShapeError
-from collections.abc import Callable
 
 
 def xavier_uniform(rows: int, cols: int, rng: random.Random) -> list[list[float]]:
@@ -336,12 +335,8 @@ class SimpleGraphDenoiser(DriftModel):
             O(N * input_dim * hidden_dim) for the per-node MLPs.
         """
         if len(features) != self.num_nodes:
-            raise ShapeError(
-                f"features must have {self.num_nodes} rows, got {len(features)}"
-            )
-        if len(adjacency) != self.num_nodes or any(
-            len(row) != self.num_nodes for row in adjacency
-        ):
+            raise ShapeError(f"features must have {self.num_nodes} rows, got {len(features)}")
+        if len(adjacency) != self.num_nodes or any(len(row) != self.num_nodes for row in adjacency):
             raise ShapeError(f"adjacency must have shape ({self.num_nodes}, {self.num_nodes})")
         if any(len(row) != self.feature_dim for row in features):
             raise ShapeError(f"features must have row width {self.feature_dim}")

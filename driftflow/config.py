@@ -99,7 +99,9 @@ DATASET_CONFIGS: dict[tuple[str, str], DatasetConfig] = {
     ("GDSS", "QM9"): DatasetConfig("GDSS", "QM9", 1.0, 0.68, None, ((0.0, 0.2), (0.95, 1.0))),
     ("GDSS", "Ego-small"): DatasetConfig("GDSS", "Ego-small", 0.2, None, None, ((0.0, 1.0),)),
     ("GDSS", "Grid"): DatasetConfig("GDSS", "Grid", 0.1, None, None, ((0.0, 1.0),)),
-    ("GDSS", "Community-small"): DatasetConfig("GDSS", "Community-small", 0.1, None, None, ((0.0, 1.0),)),
+    ("GDSS", "Community-small"): DatasetConfig(
+        "GDSS", "Community-small", 0.1, None, None, ((0.0, 1.0),)
+    ),
 }
 
 
