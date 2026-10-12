@@ -1,268 +1,95 @@
 # Usage Guide
 
-This guide shows how to use the `driftflow` package from a clean start, progressing from a minimal example to advanced integration patterns.
-
----
-
-## 1. Installation
-
-No external dependencies are required.  The package is pure Python and works with Python 3.10 or newer.
-
-```bash
-# From the repository root
-cd /path/to/driftflow
-python -m pip install -e .
-```
-
-To install development tools (pytest, mypy, ruff):
-
-```bash
-python -m pip install -e ".[dev]"
-```
-
----
-
-## 2. Minimal Example
+## Minimal typed integration
 
 ```python
 from driftflow import (
     CommonConfig,
-    DatasetConfig,
+    DvsAdaptiveController,
     DVSSampler,
-    constant_schedule,
+    DriftModel,
+    DriftState,
+    GraphState,
+    LinearSchedule,
+    get_dataset_config,
 )
 
 
-def my_drift(features, adjacency, time):
-    """Toy drift that pushes everything toward zero."""
-    f_x = [[-0.5 * v for v in row] for row in features]
-    f_a = [[-0.5 * v for v in row] for row in adjacency]
-    return f_x, f_a
+class DampingDrift(DriftModel):
+    """Move every graph value toward zero."""
+
+    def evaluate(self, state: GraphState, time: float) -> DriftState:
+        """Return a deterministic drift for ``state``."""
+        del time
+        return DriftState(
+            tuple(tuple(-0.5 * value for value in row) for row in state.features),
+            tuple(tuple(-0.5 * value for value in row) for row in state.adjacency),
+        )
 
 
-# 1. Configuration
-common = CommonConfig()
-dataset = DatasetConfig(
-    model="Test", dataset="Test",
-    kappa_ref=1.0,
-    gamma_euler=0.5, gamma_heun=0.5,
-    active_range=[(0.0, 1.0)],
-)
-
-# 2. Sampler
-sampler = DVSSampler(
-    drift_function=my_drift,
-    noise_schedule=constant_schedule(0.1),
-    common_config=common,
-    dataset_config=dataset,
-    solver="Euler",
-    seed=42,
-)
-
-# 3. Initial noise
-x0 = [[1.0, 0.0], [0.0, 1.0]]
-a0 = [[0.5, 0.3], [0.3, 0.5]]
-
-# 4. Sample
-x_t, a_t, info = sampler.sample(x0, a0, terminal_time=1.0, verbose=False)
-
-print(f"Steps taken: {int(info['total_steps'][0])}")
-print(f"Final time:  {info['final_time'][0]:.6f}")
-```
-
----
-
-## 3. Using Paper Configurations
-
-Instead of hand-writing `DatasetConfig`, load the official Table 7 values:
-
-```python
-from driftflow import CommonConfig, get_dataset_config, DVSSampler
-
-common = CommonConfig()
+state = GraphState.from_lists([[1.0, 0.0], [0.0, 1.0]], [[0.5, 0.3], [0.3, 0.5]])
 dataset = get_dataset_config("GruM", "QM9")
-
+controller = DvsAdaptiveController(CommonConfig(), dataset, dataset.gamma_euler or 0.0)
 sampler = DVSSampler(
-    drift_function=my_drift,
-    noise_schedule=...,  # your schedule
-    common_config=common,
-    dataset_config=dataset,
-    solver="Euler",
-    seed=42,
+    drift_model=DampingDrift(),
+    noise_schedule=LinearSchedule(0.01, 0.5),
+    controller=controller,
 )
+result = sampler.sample(state, terminal_time=1.0, seed=42)
+print(result.diagnostics.final_time)
 ```
 
-Available configurations:
+## Choosing solvers
 
-| Model | Dataset |
-|-------|---------|
-| GruM  | QM9, ZINC250k, Planar, SBM |
-| GDSS  | QM9, Ego-small, Grid, Community-small |
+Use `solver_name="Euler-Maruyama"` for the first-order solver or
+`solver_name="Heun"` for the predictor-corrector solver. Heun evaluates the
+drift one additional time per step.
 
----
+## Custom model
 
-## 4. Switching Solvers
+Implement `DriftModel.evaluate`. The method must return a `DriftState` with the
+same node and feature dimensions as the input. Non-finite values are rejected.
 
-Change a single argument:
+## Custom schedule
+
+Subclass `NoiseSchedule` and implement `value_at`. Return a finite,
+non-negative scale for every time in `[0, 1]`.
+
+## Custom solver
+
+Subclass `Solver`, then register it on an isolated registry:
 
 ```python
-sampler_euler = DVSSampler(..., solver="Euler")
-sampler_heun  = DVSSampler(..., solver="Heun")
+class IdentitySolver(Solver):
+    """Example solver that leaves the state unchanged."""
+
+    @property
+    def name(self) -> str:
+        """Return the registry name."""
+        return "Identity"
+
+    def step(self, state, drift, timestep, noise_scale, random_generator, drift_model, time):
+        """Return the state unchanged."""
+        del drift, timestep, noise_scale, random_generator, drift_model, time
+        return state
+
+
+registry = SolverRegistry()
+registry.register(IdentitySolver())
+sampler = DVSSampler(..., solver_registry=registry, solver_name="Identity")
 ```
 
-**When to use which:**
-- **Euler** — faster, first-order, good for exploratory runs.
-- **Heun** — more accurate, second-order, requires an extra drift evaluation per step (roughly 2x drift cost).
+## Reproducibility
 
-Both solvers share the same DVS-driven adaptive timestep logic.
+Pass `seed` to each `sample()` call. The sampler has no hidden RNG state, so
+the same state, model, configuration, and seed produce the same result even
+when the sampler object is reused.
 
----
-
-## 5. Using the Simplified Model Approximations
-
-For smoke testing without a real denoising network:
-
-```python
-from driftflow import GruMApproximation, make_drift_function
-
-approx = GruMApproximation(num_nodes=9, feature_dim=4, seed=42)
-drift = make_drift_function(approx)
-
-sampler = DVSSampler(
-    drift_function=drift,
-    noise_schedule=...,
-    common_config=common,
-    dataset_config=dataset,
-    solver="Heun",
-    seed=42,
-)
-```
-
-The approximations are deterministic MLPs.  They do **not** perform message passing or graph attention, but they satisfy the drift interface and produce non-trivial trajectories.
-
----
-
-## 6. Custom Noise Schedules
-
-Any callable `g(t) -> float` works:
-
-```python
-from driftflow import LinearSchedule, CosineSchedule, PolynomialSchedule
-
-# Linear interpolation
-sched = LinearSchedule(sigma_min=0.01, sigma_max=0.5)
-
-# Cosine
-sched = CosineSchedule(offset=0.008)
-
-# Polynomial (e.g., square-root-like)
-sched = PolynomialSchedule(exponent=0.5, sigma_min=0.01, sigma_max=1.0)
-
-# Custom lambda
-sched = lambda t: 0.1 + 0.9 * t ** 2
-```
-
----
-
-## 7. Decoding the Output Graph
-
-The sampler returns a continuous adjacency matrix.  To decode it to discrete edges:
-
-```python
-from driftflow import decode_adjacency
-
-adjacency_bin = decode_adjacency(a_t, threshold=0.5)
-edge_count = sum(sum(row) for row in adjacency_bin)
-print(f"Edges decoded: {edge_count}")
-```
-
-For a smooth sigmoid decoder:
-
-```python
-from driftflow import sigmoid_decode_adjacency
-
-adjacency_bin = sigmoid_decode_adjacency(a_t, threshold=0.5)
-```
-
----
-
-## 8. Inspecting the Sampling History
-
-The `info` dict returned by `sample()` contains rich diagnostics:
-
-```python
-import statistics
-
-info = sampler.sample(x0, a0, terminal_time=1.0, verbose=False)[2]
-
-dts = info["dt"]
-print(f"Mean dt: {statistics.mean(dts):.6f}")
-print(f"Min dt:  {min(dts):.6f}")
-print(f"Max dt:  {max(dts):.6f}")
-
-# Identify where DVS was most active
-max_vx = max(info["v_x"])
-max_idx = info["v_x"].index(max_vx)
-print(f"Peak DVS at step {int(info['steps'][max_idx])}, time={info['time'][max_idx]:.4f}")
-```
-
----
-
-## 9. Reproducibility
-
-Fix `seed` in `DVSSampler`:
-
-```python
-sampler1 = DVSSampler(..., seed=123)
-sampler2 = DVSSampler(..., seed=123)
-
-x1, a1, i1 = sampler1.sample(x0, a0, terminal_time=0.1)
-x2, a2, i2 = sampler2.sample(x0, a0, terminal_time=0.1)
-
-assert i1["dt"] == i2["dt"]
-assert x1 == x2
-```
-
-Note: this only guarantees reproducibility if `drift_function` itself is deterministic.
-
----
-
-## 10. CLI Demo
-
-A runnable demo script is provided in `examples/demo.py`:
+## CLI demo
 
 ```bash
-# Synthetic drift
-python examples/demo.py --model GruM --dataset QM9 --solver Euler
-
-# With simplified model approximation
-python examples/demo.py --model GruM --dataset QM9 --solver Euler --use-approximation
-
-# Different dataset
-python examples/demo.py --model GDSS --dataset Grid --solver Heun --seed 99
+python3 examples/demo.py --model GruM --dataset QM9 \
+  --solver Euler-Maruyama --use-approximation --seed 42
 ```
 
-The demo prints per-step diagnostics and a summary statistics block at the end.
-
----
-
-## 11. Integration into Your Own Project
-
-The typical integration pattern is:
-
-1. **Load your real denoising network** (PyTorch, JAX, etc.) and wrap it in a pure-Python callable:
-   ```python
-   def my_drift(features, adjacency, time):
-       # Convert lists to tensors, run model, convert back to lists
-       return drift_x, drift_a
-   ```
-
-2. **Pick or define a noise schedule** `g(t)` that matches your diffusion setup.
-
-3. **Instantiate `DVSSampler`** with your drift, schedule, and the paper configs.
-
-4. **Call `sample()`** and decode the result.
-
-5. **Replace `decode_adjacency()`** with your own post-processing if you have domain-specific decoding rules.
-
-The sampler is entirely stateless between calls (except for the RNG), so you can reuse the same `DVSSampler` instance for multiple graphs.
+The approximation is for smoke tests and education, not production inference.
