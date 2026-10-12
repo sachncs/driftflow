@@ -7,7 +7,7 @@ name = "driftflow"
 dynamic = ["version"]
 description = "Drift Variation Score (DVS) adaptive SDE sampler for graph diffusion"
 readme = "README.md"
-license = {text = "MIT"}
+license = "MIT"
 requires-python = ">=3.10"
 authors = [
     {name = "Sachin", email = "sachncs@gmail.com"}
@@ -16,7 +16,6 @@ keywords = ["graph diffusion", "adaptive sampling", "DVS", "SDE", "stochastic di
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
