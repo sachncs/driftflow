@@ -1,0 +1,48 @@
+---
+import Base from "~/layouts/Base.astro";
+import Nav from "~/components/Nav.astro";
+import { docs, getDoc, relativeSource, renderMarkdown } from "~/docs";
+
+export interface Props {
+  slug: string;
+}
+
+const { slug } = Astro.props;
+const doc = getDoc(slug) ?? docs[0];
+const currentIndex = docs.findIndex((item) => item.slug === doc.slug);
+const previous = docs[currentIndex - 1];
+const next = docs[currentIndex + 1];
+const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+const docHref = (item: { slug: string }) => `${base}/docs/${item.slug === "index" ? "" : `${item.slug}/`}`;
+const html = renderMarkdown(doc.markdown);
+---
+
+<Base title={`${doc.title} · driftflow docs`} description={`The ${doc.title.toLowerCase()} documentation for driftflow v2.`}>
+  <div class="ambient ambient-one" aria-hidden="true"></div>
+  <div class="ambient ambient-two" aria-hidden="true"></div>
+  <Nav />
+  <main class="docs-shell shell">
+    <div class="docs-intro">
+      <a class="back-link" href={`${base}/docs/`}>← Documentation</a>
+      <div class="docs-status"><span class="status-dot"></span> v2.0 · maintained with the source</div>
+    </div>
+    <div class="docs-layout">
+      <aside class="glass-panel docs-sidebar" aria-label="Documentation navigation">
+        <div class="sidebar-heading"><span class="eyebrow">Explore</span><span class="sidebar-count">{docs.length} guides</span></div>
+        <nav>
+          {docs.map((item) => <a class:list={{ active: item.slug === doc.slug }} href={`${base}/docs/${item.slug === "index" ? "" : `${item.slug}/`}`}>{item.title}</a>)}
+        </nav>
+        <div class="sidebar-footer"><span>Open source</span><a href="https://github.com/sachncs/driftflow" target="_blank" rel="noreferrer">View on GitHub ↗</a></div>
+      </aside>
+      <article class="glass-panel docs-article">
+        <div class="article-meta"><span>driftflow docs</span><span>{relativeSource(doc.source)}</span></div>
+        <div class="markdown-body" set:html={html}></div>
+        <div class="docs-pagination">
+          {previous ? <a href={docHref(previous)}><small>Previous</small><span>← {previous.title}</span></a> : <span></span>}
+          {next ? <a class="next" href={docHref(next)}><small>Next</small><span>{next.title} →</span></a> : <span></span>}
+        </div>
+      </article>
+    </div>
+  </main>
+  <footer class="footer shell"><span>driftflow · v2.0.0 · MIT licensed</span><span><a href={`${base}/`}>Marketing site</a><a href="https://github.com/sachncs/driftflow" target="_blank" rel="noreferrer">GitHub</a></span></footer>
+</Base>

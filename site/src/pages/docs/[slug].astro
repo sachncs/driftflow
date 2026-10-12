@@ -1,0 +1,12 @@
+---
+import DocsLayout from "~/layouts/DocsLayout.astro";
+import { docs } from "~/docs";
+
+export function getStaticPaths() {
+  return docs.filter((doc) => doc.slug !== "index").map((doc) => ({ params: { slug: doc.slug } }));
+}
+
+const { slug } = Astro.params;
+---
+
+<DocsLayout slug={slug ?? "index"} />
