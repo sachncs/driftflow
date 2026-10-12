@@ -1,34 +1,117 @@
 ---
 import Base from "~/layouts/Base.astro";
 import Nav from "~/components/Nav.astro";
-import Hero from "~/components/Hero.astro";
-import Marquee from "~/components/Marquee.astro";
-import Overview from "~/components/Overview.astro";
-import Features from "~/components/Features.astro";
-import Algorithms from "~/components/Algorithms.astro";
-import CodeDemo from "~/components/CodeDemo.astro";
-import Metrics from "~/components/Metrics.astro";
-import Architecture from "~/components/Architecture.astro";
-import Install from "~/components/Install.astro";
-import Citation from "~/components/Citation.astro";
-import CTA from "~/components/CTA.astro";
-import Footer from "~/components/Footer.astro";
+
+const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+const sampleCode = `from driftflow import (\n    CommonConfig, DvsAdaptiveController, DVSSampler,\n    GraphState, GruMApproximation, LinearSchedule,\n    get_dataset_config,\n)\n\nstate = GraphState.from_lists(\n    [[0.1, 0.2], [0.3, 0.4]],\n    [[0.0, 0.1], [0.1, 0.0]],\n)\ndataset = get_dataset_config("GruM", "QM9")\nsampler = DVSSampler(\n    drift_model=GruMApproximation(2, 2, seed=42),\n    noise_schedule=LinearSchedule(0.01, 0.5),\n    controller=DvsAdaptiveController(\n        CommonConfig(), dataset, dataset.gamma_euler or 0.0\n    ),\n)\nresult = sampler.sample(state, terminal_time=1.0, seed=42)`;
+
+const tabs = [
+  {
+    id: "contracts",
+    label: "Contracts",
+    code: `class DriftModel(ABC):\n    @abstractmethod\n    def evaluate(self, state: GraphState, time: float) -> DriftState:\n        ...\n\nclass Solver(ABC):\n    @abstractmethod\n    def step(self, state, drift, timestep, noise_scale,\n             random_generator, drift_model, time) -> GraphState:\n        ...`,
+  },
+  {
+    id: "result",
+    label: "Result",
+    code: `result = sampler.sample(state, seed=42)\n\nresult.state              # immutable GraphState\nresult.diagnostics        # typed SamplerDiagnostics\nresult.diagnostics.steps  # tuple[StepDiagnostics, ...]`,
+  },
+  {
+    id: "validation",
+    label: "Validation",
+    code: `# Boundaries reject bad values before integration\nGraphState(...)            # shape + finite checks\nLinearSchedule(...)        # scale + time checks\nDVSSampler.sample(...)      # step-limit checks`,
+  },
+];
 ---
 
 <Base>
   <Nav />
   <main>
-    <Hero />
-    <Marquee />
-    <Overview />
-    <Features />
-    <Algorithms />
-    <CodeDemo />
-    <Metrics />
-    <Architecture />
-    <Install />
-    <Citation />
-    <CTA />
+    <section class="hero shell">
+      <div class="hero-copy">
+        <p class="kicker"><span class="status-dot"></span> v2 · research infrastructure</p>
+        <h1>Adaptive steps for graphs that keep changing.</h1>
+        <p class="hero-lede">driftflow is a typed, validated Python sampler for graph-diffusion SDEs. It uses local drift variation to spend compute where the trajectory needs it.</p>
+        <div class="hero-actions">
+          <a class="button" href={`${base}/#install`}>Start with the API <span aria-hidden="true">↗</span></a>
+          <a class="text-link" href="https://github.com/sachncs/driftflow" target="_blank" rel="noreferrer">View source <span aria-hidden="true">↗</span></a>
+        </div>
+        <div class="hero-notes"><span>Python 3.10–3.14</span><span>stdlib runtime</span><span>MIT licensed</span></div>
+      </div>
+      <div class="hero-card" aria-label="Typed sampling pipeline">
+        <div class="card-label">One explicit pipeline</div>
+        <div class="pipeline">
+          <div><b>GraphState</b><span>immutable input</span></div>
+          <i>↓</i>
+          <div><b>DriftModel</b><span>evaluate(state, t)</span></div>
+          <i>↓</i>
+          <div class="pipeline-accent"><b>DVS controller</b><span>choose a bounded step</span></div>
+          <i>↓</i>
+          <div><b>Solver</b><span>Euler-Maruyama or Heun</span></div>
+        </div>
+        <p class="card-foot">Every boundary is typed and validated before the next step.</p>
+      </div>
+    </section>
+
+    <section id="workflow" class="section shell">
+      <div class="section-heading"><p class="kicker">Why adaptive?</p><h2>Less guesswork in the sampling loop.</h2><p>Flat regions do not need the same resolution as sharp turns. DVS makes that decision explicit, while the solver and model stay replaceable.</p></div>
+      <div class="three-up">
+        <article><span class="number">01</span><h3>Measure</h3><p>Compare consecutive drifts and normalize the change by the current noise scale.</p></article>
+        <article><span class="number">02</span><h3>Control</h3><p>EMA smoothing and bounded power-law scaling choose one synchronized timestep for both modalities.</p></article>
+        <article><span class="number">03</span><h3>Integrate</h3><p>Pass the typed state through a polymorphic solver and record structured diagnostics.</p></article>
+      </div>
+    </section>
+
+    <section id="api" class="section section-tint shell">
+      <div class="section-heading"><p class="kicker">The v2 API</p><h2>Small surface. Strong contracts.</h2><p>Use the interfaces you need. Replace a model, schedule, controller, solver, or decoder without editing the orchestration loop.</p></div>
+      <div class="code-card">
+        <div class="tab-list" role="tablist" aria-label="API examples">
+          {tabs.map((tab, index) => <button role="tab" id={`tab-${tab.id}`} aria-controls={`panel-${tab.id}`} aria-selected={index === 0 ? "true" : "false"} data-tab={tab.id}>{tab.label}</button>)}
+          <button class="copy-button" type="button" data-copy-target="api-sample">Copy</button>
+        </div>
+        {tabs.map((tab, index) => <pre id={`panel-${tab.id}`} role="tabpanel" aria-labelledby={`tab-${tab.id}`} data-panel={tab.id} hidden={index !== 0}><code>{tab.code}</code></pre>)}
+        <pre id="api-sample" class="sample-hidden" aria-hidden="true"><code>{sampleCode}</code></pre>
+      </div>
+    </section>
+
+    <section id="trust" class="section shell split-section">
+      <div class="section-heading"><p class="kicker">Reliability by design</p><h2>Clear failures are part of the API.</h2><p>Immutable states, finite-value checks, step limits, isolated solver registries, and per-call seeds make behavior easier to reason about.</p></div>
+      <div class="trust-list"><div><b>Typed results</b><span>SampleResult → GraphState + SamplerDiagnostics</span></div><div><b>Explicit errors</b><span>Configuration, shape, schedule, numerical, and sampling-limit failures</span></div><div><b>Honest scope</b><span>Approximation models are labeled educational stand-ins</span></div><div><b>Tested contracts</b><span>Behavioral tests cover integration and failure paths</span></div></div>
+    </section>
+
+    <section id="install" class="install-section shell">
+      <div><p class="kicker">Install</p><h2>Start from a state you can inspect.</h2><p>Read the API reference and migration guide before wiring in a production denoiser.</p></div>
+      <div class="install-card"><code>python3 -m pip install -e .</code><button class="copy-button" type="button" data-copy-target="install-command">Copy</button><pre id="install-command" class="sample-hidden" aria-hidden="true"><code>python3 -m pip install -e .</code></pre><a class="text-link" href="https://github.com/sachncs/driftflow/tree/main/docs" target="_blank" rel="noreferrer">Open documentation ↗</a></div>
+    </section>
   </main>
-  <Footer />
+  <footer class="footer shell"><span>driftflow · MIT licensed</span><span><a href="https://github.com/sachncs/driftflow" target="_blank" rel="noreferrer">GitHub</a><a href="https://arxiv.org/abs/2605.00250" target="_blank" rel="noreferrer">Paper</a></span></footer>
+
+  <script>
+    const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>("[data-tab]"));
+    const panels = Array.from(document.querySelectorAll<HTMLElement>("[data-panel]"));
+    const source = document.querySelector<HTMLElement>("#api-sample");
+    const copy = async (button: HTMLButtonElement, target: HTMLElement) => {
+      const original = button.textContent;
+      try {
+        await navigator.clipboard.writeText(target.innerText.trim());
+        button.textContent = "Copied";
+      } catch {
+        button.textContent = "Copy failed";
+      }
+      window.setTimeout(() => { button.textContent = original; }, 1400);
+    };
+    tabs.forEach((tab) => tab.addEventListener("click", () => {
+      const id = tab.dataset.tab;
+      tabs.forEach((item) => item.setAttribute("aria-selected", String(item === tab)));
+      panels.forEach((panel) => { panel.hidden = panel.dataset.panel !== id; });
+      const active = panels.find((panel) => panel.dataset.panel === id);
+      if (source && active) source.innerText = active.innerText;
+    }));
+    document.querySelectorAll<HTMLButtonElement>("[data-copy-target]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const target = document.querySelector<HTMLElement>(`#${button.dataset.copyTarget}`);
+        if (target) copy(button, target);
+      });
+    });
+  </script>
 </Base>
