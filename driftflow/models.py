@@ -62,6 +62,11 @@ import math
 import random
 from collections.abc import Callable
 
+from .contracts import DriftModel
+from .domain import DriftState, GraphState
+from .errors import ConfigurationError, ShapeError
+from collections.abc import Callable
+
 
 def xavier_uniform(rows: int, cols: int, rng: random.Random) -> list[list[float]]:
     """Generate a ``rows x cols`` matrix with Xavier uniform initialisation.
@@ -80,6 +85,8 @@ def xavier_uniform(rows: int, cols: int, rng: random.Random) -> list[list[float]
         uniformly from ``[-limit, limit]`` where ``limit =
         sqrt(6 / (rows + cols))``.
     """
+    if rows <= 0 or cols <= 0:
+        raise ConfigurationError("xavier_uniform dimensions must be positive")
     limit = math.sqrt(6.0 / (rows + cols))
     return [[rng.uniform(-limit, limit) for _ in range(cols)] for _ in range(rows)]
 
@@ -101,7 +108,7 @@ def matvec(matrix: list[list[float]], vector: list[float]) -> list[float]:
     Complexity:
         O(m * n).
     """
-    return [sum(w * v for w, v in zip(row, vector, strict=False)) for row in matrix]
+    return [sum(w * v for w, v in zip(row, vector, strict=True)) for row in matrix]
 
 
 def matmul(a: list[list[float]], b: list[list[float]]) -> list[list[float]]:
@@ -120,6 +127,12 @@ def matmul(a: list[list[float]], b: list[list[float]]) -> list[list[float]]:
     Complexity:
         O(m * k * n).
     """
+    if not a or not b or not b[0]:
+        raise ShapeError("matmul inputs must be non-empty")
+    if any(len(row) != len(b) for row in a):
+        raise ShapeError("matmul inner dimensions must agree")
+    if any(len(row) != len(b[0]) for row in b):
+        raise ShapeError("matmul right operand must be rectangular")
     result: list[list[float]] = []
     for row in a:
         new_row: list[float] = []
@@ -166,6 +179,8 @@ def time_embedding(time: float, dim: int) -> list[float]:
         * ``dim = 0`` returns ``[]`` without sampling.
         * Negative ``dim`` is treated like ``0`` by the loop guard.
     """
+    if dim < 0:
+        raise ConfigurationError("time embedding dimension must be non-negative")
     embedding: list[float] = []
     # Frequencies grow exponentially so the embedding can resolve
     # both coarse and fine time scales.
@@ -180,7 +195,7 @@ def time_embedding(time: float, dim: int) -> list[float]:
     return embedding
 
 
-class SimpleGraphDenoiser:
+class SimpleGraphDenoiser(DriftModel):
     """Simplified time-conditioned denoising network approximation.
 
     This is a toy model intended only for interface compatibility,
@@ -262,11 +277,11 @@ class SimpleGraphDenoiser:
         input_dim = feature_dim + num_nodes + time_dim
         output_dim = feature_dim + num_nodes  # drift for X and A concatenated
 
-        self.weight1 = xavier_uniform(input_dim, hidden_dim, self.rng)
+        self.weight1 = xavier_uniform(hidden_dim, input_dim, self.rng)
         self.bias1 = [self.rng.gauss(0.0, 0.01) for _ in range(hidden_dim)]
         self.weight2 = xavier_uniform(hidden_dim, hidden_dim, self.rng)
         self.bias2 = [self.rng.gauss(0.0, 0.01) for _ in range(hidden_dim)]
-        self.weight3 = xavier_uniform(hidden_dim, output_dim, self.rng)
+        self.weight3 = xavier_uniform(output_dim, hidden_dim, self.rng)
         self.bias3 = [self.rng.gauss(0.0, 0.01) for _ in range(output_dim)]
         self.time_dim = time_dim
 
@@ -320,6 +335,17 @@ class SimpleGraphDenoiser:
         Complexity:
             O(N * input_dim * hidden_dim) for the per-node MLPs.
         """
+        if len(features) != self.num_nodes:
+            raise ShapeError(
+                f"features must have {self.num_nodes} rows, got {len(features)}"
+            )
+        if len(adjacency) != self.num_nodes or any(
+            len(row) != self.num_nodes for row in adjacency
+        ):
+            raise ShapeError(f"adjacency must have shape ({self.num_nodes}, {self.num_nodes})")
+        if any(len(row) != self.feature_dim for row in features):
+            raise ShapeError(f"features must have row width {self.feature_dim}")
+
         time_emb = time_embedding(time, self.time_dim)
         drift_features: list[list[float]] = []
         drift_adjacency_rows: list[list[float]] = []
@@ -337,6 +363,12 @@ class SimpleGraphDenoiser:
             drift_adjacency_rows.append(adj_drift)
 
         return drift_features, drift_adjacency_rows
+
+    def evaluate(self, state: GraphState, time: float) -> DriftState:
+        """Evaluate the model against an immutable graph state."""
+        features, adjacency = state.to_lists()
+        drift_features, drift_adjacency = self(features, adjacency, time)
+        return DriftState.from_lists(drift_features, drift_adjacency)
 
 
 class GruMApproximation(SimpleGraphDenoiser):
@@ -404,7 +436,7 @@ class GDSSApproximation(SimpleGraphDenoiser):
         super().__init__(num_nodes, feature_dim, hidden_dim=24, seed=seed)
 
 
-def make_drift_function(model: SimpleGraphDenoiser) -> Callable:
+def make_drift_function(model: DriftModel) -> Callable:
     """Wrap a :class:`SimpleGraphDenoiser` into the standard drift interface.
 
     The wrapper closes over ``model`` so the returned callable can be
@@ -436,6 +468,8 @@ def make_drift_function(model: SimpleGraphDenoiser) -> Callable:
         adjacency: list[list[float]],
         time: float,
     ) -> tuple[list[list[float]], list[list[float]]]:
-        return model(features, adjacency, time)
+        state = GraphState.from_lists(features, adjacency)
+        result = model.evaluate(state, time)
+        return result.to_lists()
 
     return drift
