@@ -28,10 +28,12 @@ const html = renderMarkdown(doc.markdown);
     </div>
     <div class="docs-layout">
       <aside class="glass-panel docs-sidebar" aria-label="Documentation navigation">
-        <div class="sidebar-heading"><span class="eyebrow">Explore</span><span class="sidebar-count">{docs.length} guides</span></div>
-        <nav>
-          {docs.map((item) => <a class:list={{ active: item.slug === doc.slug }} href={`${base}/docs/${item.slug === "index" ? "" : `${item.slug}/`}`}>{item.title}</a>)}
-        </nav>
+        <details class="docs-nav-disclosure" open>
+          <summary class="sidebar-heading"><span class="eyebrow">Explore</span><span class="sidebar-count">{docs.length} guides</span></summary>
+          <nav>
+            {docs.map((item) => <a class:list={{ active: item.slug === doc.slug }} href={`${base}/docs/${item.slug === "index" ? "" : `${item.slug}/`}`}>{item.title}</a>)}
+          </nav>
+        </details>
         <div class="sidebar-footer"><span>Open source</span><a href="https://github.com/sachncs/driftflow" target="_blank" rel="noreferrer">View on GitHub ↗</a></div>
       </aside>
       <article class="glass-panel docs-article">
@@ -45,4 +47,8 @@ const html = renderMarkdown(doc.markdown);
     </div>
   </main>
   <footer class="footer shell"><span>driftflow · v2.0.0 · MIT licensed</span><span><a href={`${base}/`}>Marketing site</a><a href="https://github.com/sachncs/driftflow" target="_blank" rel="noreferrer">GitHub</a></span></footer>
+  <script>
+    const docsDisclosure = document.querySelector<HTMLDetailsElement>(".docs-nav-disclosure");
+    if (docsDisclosure && window.matchMedia("(max-width: 680px)").matches) docsDisclosure.removeAttribute("open");
+  </script>
 </Base>
