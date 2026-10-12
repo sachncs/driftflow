@@ -16,7 +16,6 @@ from driftflow import (
     ThresholdGraphDecoder,
     constant_schedule,
     decode_adjacency,
-    in_active_range,
     sigmoid_decode_adjacency,
 )
 from driftflow.models import matmul, matvec, time_embedding
@@ -53,7 +52,7 @@ def test_model_rejects_wrong_graph_shape() -> None:
     model = GruMApproximation(2, 2)
 
     with pytest.raises(ValueError, match="adjacency"):
-        model([[0.0, 0.0], [0.0, 0.0]], [[0.0]], 0.0)
+        model.predict([[0.0, 0.0], [0.0, 0.0]], [[0.0]], 0.0)
 
 
 def test_matrix_helpers_reject_dimension_mismatch() -> None:
@@ -79,9 +78,6 @@ def test_decoders_are_polymorphic_and_stable_for_extreme_logits() -> None:
     assert decode_adjacency([[0.5]]) == [[1.0]]
 
 
-def test_decoder_rejects_invalid_threshold_and_ranges_are_inclusive() -> None:
+def test_decoder_rejects_invalid_threshold() -> None:
     with pytest.raises(ConfigurationError, match="threshold"):
         ThresholdGraphDecoder(2.0)
-    assert in_active_range(0.0, [(0.0, 1.0)])
-    assert in_active_range(1.0, [(0.0, 1.0)])
-    assert not in_active_range(1.1, [(0.0, 1.0)])

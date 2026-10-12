@@ -19,7 +19,7 @@ from .errors import (
     ShapeError,
     SolverContractError,
 )
-from .models import GDSSApproximation, GruMApproximation, SimpleGraphDenoiser, make_drift_function
+from .models import GDSSApproximation, GruMApproximation, SimpleGraphDenoiser
 from .sampler import (
     DvsAdaptiveController,
     DVSSampler,
@@ -40,9 +40,7 @@ from .schedule import (
 from .utils import (
     SigmoidGraphDecoder,
     ThresholdGraphDecoder,
-    clip_value,
     decode_adjacency,
-    in_active_range,
     sigmoid_decode_adjacency,
 )
 from .version import __version__
@@ -84,14 +82,11 @@ __all__ = [
     "SolverRegistry",
     "StepDiagnostics",
     "ThresholdGraphDecoder",
-    "clip_value",
     "compute_drift_variation_score",
     "compute_timestep",
     "constant_schedule",
     "decode_adjacency",
     "get_dataset_config",
-    "in_active_range",
-    "make_drift_function",
     "sigmoid_decode_adjacency",
     "update_ema",
 ]

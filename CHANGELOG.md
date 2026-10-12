@@ -11,37 +11,29 @@ chronological order, with the full commit id, ISO-8601 datetime
 
 ## [Unreleased]
 
+No unreleased changes.
+
+## [2.0.0] - 2026-10-12
+
 ### Added
 
-- Comprehensive module-, class-, function-, and method-level docstrings
-  across the entire `driftflow` package (Google style, with "what" and
-  "why" rationale).
-- One-line docstring on every test method (D102 satisfied across the
-  test suite).
-- Architecture data-flow diagram in `README.md`.
-- `scripts/ci.sh` -- a local runner mirroring `.github/workflows/ci.yml`
-  so contributors can verify the workflow before pushing.
+- Typed v2 contracts for models, schedules, controllers, solvers, decoders,
+  immutable graph states, diagnostics, and explicit error types.
+- Instance-scoped polymorphic solver registries and per-call seeded sampling.
+- Production checks covering Ruff, mypy, pytest coverage, demo execution,
+  package builds, dependency audits, and the static site build.
 
 ### Changed
 
-- README restyled with centred header, shields.io badges, em-dash feature
-  bullets, configuration tables for Tables 6 and 7, expanded project
-  structure, and the standard Contributing / Code of Conduct / Security /
-  License footer sections.
-- Migrated `typing.List` / `typing.Tuple` / `typing.Dict` and
-  `Optional[T]` annotations to PEP 585 / PEP 604 built-ins
-  (`list` / `tuple` / `dict` / `X | None`).
-- Switched to `collections.abc.Callable` and added explicit
-  `strict=False` to `zip()` calls.
-- Reorganised ruff configuration under `[tool.ruff.lint]` to silence
-  deprecation warnings.
-- Reduced ruff error count from 357 to 0 across `src/`, `tests/`, and
-  `examples/`.
-- Removed unused imports across all source and test modules.
+- Rebuilt the sampler around validated `GraphState` and `DriftState` objects.
+- Reworked the public documentation and static site around the v2 API.
+- Updated CI and Pages workflows to use the current API and reproducible
+  dependency installation.
 
 ### Removed
 
-- Deprecation warnings emitted by older ruff configuration layout.
+- Retired global solver registration and untyped callable adapters.
+- Removed unused scalar/range helpers and the unused Tailwind/sharp site stack.
 
 ## [1.0.0] - 2026-09-07
 

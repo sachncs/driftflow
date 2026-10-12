@@ -1,252 +1,83 @@
 # Contributing to driftflow
 
-Thank you for your interest in contributing! This document provides guidelines and instructions for contributing to this project.
+Thank you for contributing. Changes should preserve the typed v2 API, the
+Google Python style guide, and the repository's explicit reliability contracts.
 
-## Table of Contents
-
-- [Code of Conduct](#code-of-conduct)
-- [Getting Started](#getting-started)
-- [Development Setup](#development-setup)
-- [Branch Naming](#branch-naming)
-- [Commit Conventions](#commit-conventions)
-- [Coding Standards](#coding-standards)
-- [Running Tests](#running-tests)
-- [Pull Request Process](#pull-request-process)
-- [Documentation](#documentation)
-
-## Code of Conduct
-
-This project follows the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code.
-
-## Getting Started
-
-1. Fork the repository on GitHub
-2. Clone your fork locally:
-   ```bash
-   git clone https://github.com/sachncs/driftflow.git
-   cd driftflow
-   ```
-3. Add the upstream remote:
-   ```bash
-   git remote add upstream https://github.com/sachncs/driftflow.git
-   ```
-4. Create a branch for your changes:
-   ```bash
-   git checkout -b feature/my-feature
-   ```
-
-## Development Setup
+## Development setup
 
 ```bash
-# Install in editable mode with dev dependencies
-pip install -e ".[dev]"
-
-# Verify installation
-python -c "import driftflow; print(driftflow.__version__)"
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e ".[dev]"
 ```
 
-## Branch Naming
-
-Use descriptive branch names with prefixes:
-
-| Prefix | Purpose | Example |
-|--------|---------|---------|
-| `feat/` | New features | `feat/add-numpy-backend` |
-| `fix/` | Bug fixes | `fix/ema-reset-edge-case` |
-| `docs/` | Documentation | `docs/update-api-reference` |
-| `refactor/` | Code restructuring | `refactor/extract-solver-registry` |
-| `test/` | Test additions | `test/numerical-stability` |
-| `chore/` | Maintenance | `chore/update-ci` |
-
-## Commit Conventions
-
-This project uses [Conventional Commits](https://www.conventionalcommits.org/). All commit messages must follow this format:
-
-```
-<type>[optional scope]: <description>
-
-[optional body]
-
-[optional footer(s)]
-```
-
-### Types
-
-| Type | Description |
-|------|-------------|
-| `feat` | A new feature |
-| `fix` | A bug fix |
-| `docs` | Documentation only changes |
-| `style` | Code style changes (formatting, no logic changes) |
-| `refactor` | Code change that neither fixes a bug nor adds a feature |
-| `perf` | Performance improvement |
-| `test` | Adding or updating tests |
-| `chore` | Maintenance tasks, dependency updates |
-| `ci` | CI/CD configuration changes |
-
-### Examples
-
-```
-feat: add Numba JIT backend for sampler
-
-fix: handle edge case with single-node graphs in active range check
-
-docs: add API reference for noise schedule classes
-
-test: add numerical stability tests for extreme parameter values
-
-chore: update pytest to v8.0
-```
-
-### Scope
-
-Optional scope should be used to identify the affected module:
-
-```
-feat(sampler): add adaptive epsilon scheduling
-fix(config): handle missing dataset config gracefully
-docs(utils): document clip_value NaN behavior
-```
-
-## Coding Standards
-
-This project follows the [Google Python Style Guide](https://google.github.io/styleguide/pyguide.html).
-
-### Key Conventions
-
-- **Line length:** Maximum 100 characters
-- **Indentation:** 4 spaces (no tabs)
-- **Naming:**
-  - `snake_case` for functions, methods, and variables
-  - `PascalCase` for class names
-  - `UPPER_CASE` for module-level constants
-- **Type hints:** Required for all public APIs
-- **Docstrings:** Required for all public modules, classes, methods, and functions (Google-style)
-
-### Linting
+Run the same checks used locally and in CI:
 
 ```bash
-# Check for linting errors
-ruff check driftflow/ tests/ examples/
-
-# Auto-fix linting issues
-ruff check --fix driftflow/ tests/ examples/
-
-# Format code
-ruff format driftflow/ tests/ examples/
-
-# Type check
-mypy driftflow
+PYTHON=.venv/bin/python ./scripts/check.sh
+PYTHON=.venv/bin/python ./scripts/ci.sh
 ```
 
-### Pre-commit Checks
+These commands lint and format-check Python, run mypy, run pytest with the
+90% coverage floor, execute the demo, build the Astro site and Python package,
+and audit Python and site dependencies.
 
-Before submitting a PR, ensure all of the following pass:
+## Coding standards
+
+- Follow the [Google Python Style Guide](https://google.github.io/styleguide/pyguide.html).
+- Use complete type annotations and Google-style docstrings for public APIs.
+- Use `snake_case` for functions and variables, `PascalCase` for classes, and
+  `UPPER_CASE` for module constants.
+- Do not use underscore-prefixed members as a semi-private API convention.
+- Keep public extension points in `driftflow/contracts.py` and public data in
+  frozen domain objects.
+- Validate shape, finiteness, and bounds at numerical boundaries.
+- Do not add global mutable registries or hidden process state.
+
+## Tests
+
+Tests live in `tests/` and should cover both successful behavior and failure
+contracts. The current layout is:
+
+- `test_domain.py`: immutable graph and drift states.
+- `test_v2_config.py`: configuration validation.
+- `test_v2_components.py`: schedules, models, matrix helpers, and decoders.
+- `test_v2_sampler.py`: integration, polymorphism, reproducibility, and safety.
+
+Add a regression test for every bug fix. Use pytest node IDs from the current
+files when running a focused test, for example:
 
 ```bash
-# All checks in one command
-ruff check driftflow/ tests/ examples/ && ruff format --check driftflow/ tests/ examples/ && mypy driftflow && python -m pytest tests/
+python -m pytest tests/test_v2_sampler.py -q
+python -m pytest tests/test_v2_sampler.py::test_sampler_is_reproducible_per_call_seed -q
 ```
 
-## Running Tests
+## Extension workflow
+
+Implement `DriftModel`, `NoiseSchedule`, `AdaptiveController`, `Solver`, or
+`GraphDecoder` rather than adding special cases to `DVSSampler`. Register
+custom solvers on an instance-local `SolverRegistry`; never modify a global
+registry. Return `GraphState` and `DriftState` objects from model and solver
+boundaries.
+
+## Documentation and site
+
+Update the relevant file in `docs/` and add a migration note when changing a
+public contract. Keep examples executable against the current API. For the
+site:
 
 ```bash
-# Run all tests
-python -m pytest tests/
-
-# Run with verbose output
-python -m pytest tests/ -v
-
-# Run with coverage report
-python -m pytest tests/ --cov=driftflow --cov-report=term-missing
-
-# Run a specific test file
-python -m pytest tests/test_sampler.py
-
-# Run a specific test class
-python -m pytest tests/test_sampler.py::TestDVSSamplerEndToEnd
-
-# Run a specific test
-python -m pytest tests/test_sampler.py::TestDVSSamplerEndToEnd::test_sample_returns_expected_keys
+cd site
+npm ci
+npm run build
+npm audit --omit=dev --audit-level=high
 ```
 
-### Writing Tests
+The site is a static Astro project deployed from `site/dist` under the
+`/driftflow` project path.
 
-- Place tests in the `tests/` directory
-- Name test files `test_<module>.py`
-- Use descriptive class names prefixed with `Test`
-- Use descriptive method names prefixed with `test_`
-- Each test should test one concept
-- Include edge cases and boundary conditions
-- Use `pytest` fixtures when appropriate
+## Commits and pull requests
 
-## Pull Request Process
-
-### Before Submitting
-
-1. Ensure all tests pass
-2. Run linting and formatting checks
-3. Update documentation if you changed public APIs
-4. Update `CHANGELOG.md` under the `[Unreleased]` section
-5. Keep changes focused and atomic
-
-### PR Guidelines
-
-1. Create a descriptive PR title following commit conventions
-2. Fill out the PR template completely
-3. Reference related issues (e.g., "Fixes #42")
-4. Keep PRs small and focused -- one feature or fix per PR
-5. Respond to review feedback promptly
-6. Squash commits before merging if requested
-
-### Review Criteria
-
-PRs are reviewed for:
-
-- Correctness: Does it work as intended?
-- Tests: Are there adequate tests for the changes?
-- Style: Does it follow project coding standards?
-- Documentation: Are public APIs documented?
-- Performance: Does it introduce any performance regressions?
-- Compatibility: Does it maintain backward compatibility?
-
-## Documentation
-
-### API Documentation
-
-- Write docstrings for all public classes, methods, and functions
-- Follow Google-style docstring format
-- Include type hints for all parameters and return values
-- Provide usage examples in docstrings where helpful
-
-### Docstring Example
-
-```python
-def compute_drift_variation_score(
-    drift_prev: list[list[float]],
-    drift_curr: list[list[float]],
-    eps_num: float = 1e-12,
-) -> float:
-    """Compute the Drift Variation Score (DVS) between consecutive steps.
-
-    Implements Equation 13 from the paper. The DVS measures the magnitude
-    of change in drift between consecutive Euler-Maruyama steps.
-
-    Args:
-        drift_prev: Drift values from the previous step, shape (N, D).
-        drift_curr: Drift values from the current step, shape (N, D).
-        eps_num: Numerical stability floor to prevent division by zero.
-
-    Returns:
-        The scalar DVS value. Higher values indicate larger drift changes.
-
-    Raises:
-        ValueError: If input arrays have mismatched dimensions.
-    """
-```
-
-### Updating Documentation
-
-- Update `docs/` files when adding new features
-- Keep README.md examples working and up to date
-- Add entries to `CHANGELOG.md` for all user-facing changes
+Use Conventional Commit messages and keep commits atomic. Before opening a
+pull request, update `CHANGELOG.md` under `Unreleased`, explain behavior and
+test changes, and confirm the complete local gate passes.
