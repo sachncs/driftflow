@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from random import Random
 
-from .domain import DriftState, GraphState
+from .domain import AdaptiveDecision, DriftState, GraphState
 
 
 class DriftModel(ABC):
@@ -52,15 +52,26 @@ class Solver(ABC):
 class AdaptiveController(ABC):
     """Abstract controller that chooses a synchronized timestep."""
 
+    @property
+    @abstractmethod
+    def eps_bound(self) -> float:
+        """Return the controller's termination tolerance."""
+
+    @property
+    @abstractmethod
+    def max_steps(self) -> int:
+        """Return the controller's safety step limit."""
+
     @abstractmethod
     def choose_timestep(
         self,
         current_drift: DriftState,
         previous_drift: DriftState | None,
+        noise_scale: float,
         time: float,
         terminal_time: float,
-    ) -> float:
-        """Return the next timestep for the current trajectory."""
+    ) -> AdaptiveDecision:
+        """Return the next timestep and diagnostics for the trajectory."""
 
 
 class GraphDecoder(ABC):

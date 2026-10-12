@@ -110,6 +110,17 @@ class SamplerDiagnostics:
 
 
 @dataclass(frozen=True, slots=True)
+class AdaptiveDecision:
+    """Controller decision and variation metrics for one step."""
+
+    timestep: float
+    feature_variation: float
+    adjacency_variation: float
+    smoothed_feature_variation: float
+    smoothed_adjacency_variation: float
+
+
+@dataclass(frozen=True, slots=True)
 class SampleResult:
     """Typed result returned by the v2 sampler."""
 
