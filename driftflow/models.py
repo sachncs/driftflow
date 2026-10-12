@@ -294,13 +294,13 @@ class SimpleGraphDenoiser(DriftModel):
             Output vector of length ``output_dim``.
         """
         h = matvec(self.weight1, features)
-        h = [v + b for v, b in zip(h, self.bias1, strict=False)]
+        h = [v + b for v, b in zip(h, self.bias1, strict=True)]
         h = relu(h)
         h = matvec(self.weight2, h)
-        h = [v + b for v, b in zip(h, self.bias2, strict=False)]
+        h = [v + b for v, b in zip(h, self.bias2, strict=True)]
         h = relu(h)
         out = matvec(self.weight3, h)
-        out = [v + b for v, b in zip(out, self.bias3, strict=False)]
+        out = [v + b for v, b in zip(out, self.bias3, strict=True)]
         return out
 
     def predict(
