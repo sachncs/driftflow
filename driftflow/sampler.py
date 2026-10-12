@@ -18,6 +18,7 @@ from .errors import (
     NumericalStabilityError,
     SamplingLimitError,
     ShapeError,
+    SolverContractError,
 )
 
 
@@ -83,6 +84,18 @@ def compute_timestep(
         )
     raw_timestep = dt_base * float((kappa_ref / (smoothed_score + eps_num)) ** beta)
     return max(dt_min, min(dt_max, raw_timestep))
+
+
+def validate_drift_matches(state: GraphState, drift: DriftState) -> None:
+    """Validate that a model output exactly matches the current state shape."""
+    if len(state.features) != len(drift.features) or len(state.adjacency) != len(drift.adjacency):
+        raise ShapeError("drift matrices must match state row counts")
+    for state_row, drift_row in zip(state.features, drift.features, strict=True):
+        if len(state_row) != len(drift_row):
+            raise ShapeError("drift features must match state shape")
+    for state_row, drift_row in zip(state.adjacency, drift.adjacency, strict=True):
+        if len(state_row) != len(drift_row):
+            raise ShapeError("drift adjacency must match state shape")
 
 
 class DvsAdaptiveController(AdaptiveController):
@@ -221,6 +234,7 @@ class HeunSolver(Solver):
         noise = draw_noise(state, noise_scale, random_generator)
         predicted = advance_with_noise(state, drift, timestep, noise)
         second_drift = drift_model.evaluate(predicted, time + timestep)
+        validate_drift_matches(predicted, second_drift)
         return average_drift_and_noise(state, drift, second_drift, timestep, noise)
 
 
@@ -368,8 +382,7 @@ class DVSSampler:
         """Sample from ``state`` to ``terminal_time`` using a fresh RNG."""
         if not isfinite(terminal_time) or terminal_time < 0.0 or terminal_time > 1.0:
             raise ConfigurationError("terminal_time must be finite and within [0, 1]")
-        if hasattr(self.controller, "reset"):
-            self.controller.reset()
+        self.controller.reset()
         current_state = state
         previous_drift: DriftState | None = None
         random_generator = Random(seed)
@@ -382,6 +395,7 @@ class DVSSampler:
             if step_number > self.controller.max_steps:
                 raise SamplingLimitError("sampling exceeded max_steps")
             drift = self.drift_model.evaluate(current_state, time)
+            validate_drift_matches(current_state, drift)
             noise_scale = self.noise_schedule.value_at(time)
             if not isfinite(noise_scale) or noise_scale < 0.0:
                 raise NumericalStabilityError("noise schedule returned an invalid noise scale")
@@ -400,6 +414,8 @@ class DVSSampler:
                 self.drift_model,
                 time,
             )
+            if not isinstance(next_state, GraphState):
+                raise SolverContractError("solver must return a GraphState")
             diagnostics.append(
                 StepDiagnostics(
                     step_number,

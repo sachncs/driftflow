@@ -62,6 +62,10 @@ class AdaptiveController(ABC):
     def max_steps(self) -> int:
         """Return the controller's safety step limit."""
 
+    def reset(self) -> None:
+        """Reset trajectory-local state before a new sampling run."""
+        return None
+
     @abstractmethod
     def choose_timestep(
         self,
