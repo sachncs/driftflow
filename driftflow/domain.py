@@ -82,6 +82,10 @@ class DriftState:
         """Create immutable drift from ordinary nested lists."""
         return cls(tuple(tuple(row) for row in features), tuple(tuple(row) for row in adjacency))
 
+    def to_lists(self) -> tuple[list[list[float]], list[list[float]]]:
+        """Return defensive mutable copies for numerical adapters."""
+        return [list(row) for row in self.features], [list(row) for row in self.adjacency]
+
 
 @dataclass(frozen=True, slots=True)
 class StepDiagnostics:
