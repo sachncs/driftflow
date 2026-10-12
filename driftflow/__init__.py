@@ -37,7 +37,14 @@ from .schedule import (
     PolynomialSchedule,
     constant_schedule,
 )
-from .utils import clip_value, decode_adjacency, in_active_range, sigmoid_decode_adjacency
+from .utils import (
+    SigmoidGraphDecoder,
+    ThresholdGraphDecoder,
+    clip_value,
+    decode_adjacency,
+    in_active_range,
+    sigmoid_decode_adjacency,
+)
 from .version import __version__
 
 __all__ = [
@@ -70,11 +77,13 @@ __all__ = [
     "SamplingLimitError",
     "ScheduleError",
     "ShapeError",
+    "SigmoidGraphDecoder",
     "SimpleGraphDenoiser",
     "Solver",
     "SolverContractError",
     "SolverRegistry",
     "StepDiagnostics",
+    "ThresholdGraphDecoder",
     "clip_value",
     "compute_drift_variation_score",
     "compute_timestep",
