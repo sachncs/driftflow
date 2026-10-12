@@ -59,7 +59,7 @@ jobs:
         run: |
           python -m pip install --no-cache-dir pip-audit
           python -m pip install --no-cache-dir -e ".[dev]"
-          python -m pip freeze | grep -v '^driftflow' > /tmp/driftflow-audit-requirements.txt
+          python -m pip freeze | grep -v -E '(^driftflow|^-e .*#egg=driftflow)' > /tmp/driftflow-audit-requirements.txt
           pip-audit --strict --requirement /tmp/driftflow-audit-requirements.txt
 
       - name: Run demo smoke test
