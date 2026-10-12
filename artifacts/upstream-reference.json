@@ -1,0 +1,21 @@
+{
+  "repository": "https://github.com/kunzhan/DVS",
+  "commit": "f51057ebd877fb007fd7cdfe8d675a98a0b55a5e",
+  "paper": "https://arxiv.org/abs/2605.00250",
+  "reference": {
+    "model_family": "GruM graph transformer",
+    "qm9_input_features": 4,
+    "qm9_max_nodes": 9,
+    "qm9_adjacency_channels": 2,
+    "qm9_preprocessing": [
+      "data/preprocess.py --dataset qm9",
+      "data/preprocess_for_nspdk.py --dataset qm9",
+      "atom feature encoding",
+      "adjacency rescaling by model.adj_scale"
+    ],
+    "checkpoint_format": "PyTorch state_dict checkpoint (.pth)",
+    "published_checkpoint_source": "Google Drive links in upstream README"
+  },
+  "comparison_status": "provenance recorded; compact artifact validated against its independent eager teacher",
+  "limitation": "Upstream checkpoint download and RDKit/graph-tool evaluation are not part of this compact artifact release"
+}

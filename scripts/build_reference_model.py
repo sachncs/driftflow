@@ -99,6 +99,9 @@ def build(output_dir: Path) -> dict[str, object]:
                 float(torch.nn.functional.mse_loss(actual_features, expected_features))
                 + float(torch.nn.functional.mse_loss(actual_adjacency, expected_adjacency))
             )
+    validation_loss = sum(validation_losses) / len(validation_losses)
+    if validation_loss > 0.01:
+        raise RuntimeError(f"reference quality gate failed: validation loss {validation_loss}")
     features = torch.tensor(
         [[0.1, -0.2, 0.3], [0.4, 0.2, -0.1], [-0.3, 0.5, 0.2], [0.0, -0.4, 0.6]]
     )
@@ -126,6 +129,7 @@ def build(output_dir: Path) -> dict[str, object]:
         "sha256": digest,
         "bytes": checkpoint.stat().st_size,
         "max_artifact_bytes": 10_000_000,
+        "parameter_count": sum(parameter.numel() for parameter in model.parameters()),
         "num_nodes": 4,
         "feature_dim": 3,
         "feature_order": ["feature_0", "feature_1", "feature_2"],
@@ -137,7 +141,8 @@ def build(output_dir: Path) -> dict[str, object]:
             "samples": 256,
             "steps": 512,
             "validation_samples": 32,
-            "validation_loss": sum(validation_losses) / len(validation_losses),
+            "validation_loss": validation_loss,
+            "max_validation_loss": 0.01,
             "teacher": "deterministic synthetic graph drift",
         },
         "export_max_abs_error": max_error,

@@ -2,9 +2,10 @@
   "name": "driftflow-reference-graph-drift",
   "version": "1.0.0",
   "checkpoint": "driftflow-reference-graph-drift.ts",
-  "sha256": "eb629d514c8d55662041c7a67aebbec21ba2edf77ad734abfe9a88074f61e8d0",
-  "bytes": 15173,
+  "sha256": "1c1f13d426d0256b0d52a7109bbbbca1667538c7a4583fc201d5c967a92c201e",
+  "bytes": 15237,
   "max_artifact_bytes": 10000000,
+  "parameter_count": 740,
   "num_nodes": 4,
   "feature_dim": 3,
   "feature_order": [
@@ -37,6 +38,7 @@
     "steps": 512,
     "validation_samples": 32,
     "validation_loss": 0.0005265529113955836,
+    "max_validation_loss": 0.01,
     "teacher": "deterministic synthetic graph drift"
   },
   "export_max_abs_error": 0.0

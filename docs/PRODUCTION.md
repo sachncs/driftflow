@@ -73,15 +73,25 @@ python scripts/benchmark_reference_model.py --artifact-dir artifacts --iteration
 
 The generated manifest records the checkpoint digest, 4-node/3-feature input
 contract, canonical feature order, identity preprocessing, training seed,
-validation loss, and eager-versus-TorchScript export error. The checked-in
-checkpoint is below the 10 MB deployment budget. `from_manifest()` rejects
-missing metadata, non-canonical feature order, and unsupported preprocessing
-before loading the artifact.
+validation loss, parameter count, and eager-versus-TorchScript export error.
+The checked-in checkpoint is below the 10 MB deployment budget.
+`from_manifest()` rejects missing metadata, non-canonical feature order, and
+unsupported preprocessing before loading the artifact.
 
 The local Apple Silicon baseline is recorded in
 `artifacts/reference-benchmark.json`; it is evidence for regression detection,
-not a production SLO. Re-run the benchmark on the target host and set service
-limits from that environment.
+not a production SLO. It includes an independent teacher-quality MSE gate,
+peak RSS delta, p50/p95/max latency, and concurrent requests per second.
+Re-run the benchmark on the target host and set service limits from that
+environment.
+
+The upstream DVS repository is recorded in
+`artifacts/upstream-reference.json`. Its published checkpoints are full
+GruM graph-transformer training artifacts with dataset-specific preprocessing;
+they are not silently relabeled as this compact reference model. The compact
+artifact is therefore production-valid for its declared contract, while a
+GruM/GDSS production claim still requires importing an upstream checkpoint and
+running the same manifest, quality, and deployment gates against it.
 
 ## Release gates
 
