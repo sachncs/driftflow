@@ -15,6 +15,7 @@ from driftflow import (
     GraphState,
     LinearSchedule,
     SamplingLimitError,
+    ShapeError,
     Solver,
     SolverRegistry,
     get_dataset_config,
@@ -43,6 +44,29 @@ class InvalidDrift(DriftModel):
             tuple(tuple(float("nan") for _ in row) for row in state.features),
             state.adjacency,
         )
+
+
+class MismatchedDrift(DriftModel):
+    """Model that returns a finite but incompatible drift shape."""
+
+    def evaluate(self, state: GraphState, time: float) -> DriftState:
+        """Return a drift with a missing feature column."""
+        del state, time
+        return DriftState(((1.0,),), ((1.0,),))
+
+
+class InvalidSolver(Solver):
+    """Solver that violates the return-type contract."""
+
+    @property
+    def name(self) -> str:
+        """Return the invalid solver name."""
+        return "Invalid"
+
+    def step(self, state, drift, timestep, noise_scale, random_generator, drift_model, time):
+        """Return an invalid value instead of a graph state."""
+        del state, drift, timestep, noise_scale, random_generator, drift_model, time
+        return []
 
 
 @dataclass
@@ -116,6 +140,24 @@ def test_registry_isolated_and_custom_solver_is_polymorphic() -> None:
 def test_invalid_drift_fails_before_integration() -> None:
     with pytest.raises(ValueError, match="finite"):
         build_sampler(InvalidDrift()).sample(initial_state(), terminal_time=0.01, seed=1)
+
+
+def test_mismatched_drift_fails_with_shape_error() -> None:
+    with pytest.raises(ShapeError, match="drift"):
+        build_sampler(MismatchedDrift()).sample(initial_state(), terminal_time=0.01, seed=1)
+
+
+def test_solver_return_type_is_checked() -> None:
+    registry = SolverRegistry((InvalidSolver(),))
+    sampler = DVSSampler(
+        ConstantDrift(),
+        LinearSchedule(0.01, 0.1),
+        DvsAdaptiveController(CommonConfig(), get_dataset_config("GruM", "QM9"), 0.22),
+        solver_registry=registry,
+        solver_name="Invalid",
+    )
+    with pytest.raises(TypeError, match="GraphState"):
+        sampler.sample(initial_state(), terminal_time=0.01, seed=1)
 
 
 def test_sampling_limit_prevents_runaway_trajectories() -> None:
